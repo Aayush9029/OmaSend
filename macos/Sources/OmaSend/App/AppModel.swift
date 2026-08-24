@@ -142,13 +142,20 @@ final class AppModel {
         pasteboardChangeCount = pasteboard.changeCount
         guard let payload = readPasteboard(), payload.fingerprint != lastClipboardFingerprint else { return }
         lastClipboardFingerprint = payload.fingerprint
+        if let fileURL = payload.fileURL {
+            let message = makeFileMessage(fileURL)
+            add(message)
+            network.broadcastFile(fileURL, message: message)
+            return
+        }
         let message = makeMessage(payload: payload)
         add(message)
         network.broadcast(message)
     }
 
     private func receive(_ message: WireMessage) {
-        guard message.type == "clipboard", message.originId != configuration.deviceId else { return }
+        guard (message.type == "clipboard" || message.type == "file"),
+              message.originId != configuration.deviceId else { return }
         guard add(message), autoCopy else { return }
         writePasteboard(message)
     }
@@ -156,6 +163,9 @@ final class AppModel {
     @discardableResult
     private func add(_ message: WireMessage) -> Bool {
         let hasText = message.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let isFile = message.type == "file"
+            && message.fileName?.isEmpty == false
+            && message.filePath.map(FileManager.default.fileExists(atPath:)) == true
         let isImage: Bool = {
             guard message.contentType?.hasPrefix("image/") == true,
                   let encoded = message.data,
@@ -163,13 +173,14 @@ final class AppModel {
             else { return false }
             return NSImage(data: data) != nil
         }()
-        guard (hasText || isImage), !history.contains(where: { $0.id == message.id }) else { return false }
+        guard (hasText || isImage || isFile), !history.contains(where: { $0.id == message.id }) else { return false }
         let item = ClipboardItem(
             id: message.id, text: message.text ?? "", originId: message.originId,
             originName: message.originName, createdAt: message.createdAt,
             isLocal: message.originId == configuration.deviceId,
             contentType: message.contentType, data: message.data,
-            thumbnail: thumbnailBase64(from: message.data)
+            thumbnail: thumbnailBase64(from: message.data),
+            fileName: message.fileName, fileSize: message.fileSize, filePath: message.filePath
         )
         history.insert(item, at: 0)
         if history.count > OmaSendConstants.maxHistory { history.removeLast(history.count - OmaSendConstants.maxHistory) }
@@ -187,10 +198,18 @@ final class AppModel {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         pasteboardChangeCount = pasteboard.changeCount
-        lastClipboardFingerprint = ClipboardPayload(contentType: "text/plain", text: text, data: nil).fingerprint
+        lastClipboardFingerprint = ClipboardPayload(contentType: "text/plain", text: text, data: nil, fileURL: nil).fingerprint
     }
 
     private func writePasteboard(_ item: ClipboardItem) {
+        if let filePath = item.filePath, FileManager.default.fileExists(atPath: filePath) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([URL(fileURLWithPath: filePath) as NSURL])
+            pasteboardChangeCount = pasteboard.changeCount
+            lastClipboardFingerprint = readPasteboard()?.fingerprint
+            return
+        }
         writePasteboard(WireMessage(
             version: OmaSendConstants.protocolVersion, type: "clipboard",
             id: item.id, originId: item.originId, originName: item.originName,
@@ -208,7 +227,7 @@ final class AppModel {
             pasteboard.setData(clipboardData, forType: .png)
             pasteboardChangeCount = pasteboard.changeCount
             lastClipboardFingerprint = ClipboardPayload(
-                contentType: "image/png", text: nil, data: clipboardData
+                contentType: "image/png", text: nil, data: clipboardData, fileURL: nil
             ).fingerprint
         } else if let text = message.text {
             writePasteboard(text)
@@ -225,21 +244,43 @@ final class AppModel {
         )
     }
 
+    private func makeFileMessage(_ url: URL) -> WireMessage {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .nameKey])
+        let size = Int64(values?.fileSize ?? 0)
+        let modified = Int64((values?.contentModificationDate?.timeIntervalSince1970 ?? 0) * 1_000)
+        let material = "\(configuration.deviceId)\u{0}\(url.path)\u{0}\(size)\u{0}\(modified)"
+        let id = SHA256.hash(data: Data(material.utf8)).map { String(format: "%02x", $0) }.joined()
+        return WireMessage(
+            version: OmaSendConstants.protocolVersion, type: "file", id: id,
+            originId: configuration.deviceId, originName: configuration.deviceName,
+            createdAt: Int64(Date().timeIntervalSince1970 * 1_000), text: nil,
+            contentType: "application/x-omasend-file", fileName: values?.name ?? url.lastPathComponent,
+            fileSize: size, filePath: url.path
+        )
+    }
+
     private func readPasteboard() -> ClipboardPayload? {
         let pasteboard = NSPasteboard.general
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [NSURL],
+           let url = urls.first as URL?,
+           let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+           values.isRegularFile == true, (values.fileSize ?? 0) > 0 {
+            return ClipboardPayload(contentType: "application/x-omasend-file", text: nil, data: nil, fileURL: url)
+        }
         if let data = pasteboard.data(forType: .png), !data.isEmpty,
            data.count <= OmaSendConstants.maxClipboardBytes {
-            return ClipboardPayload(contentType: "image/png", text: nil, data: data)
+            return ClipboardPayload(contentType: "image/png", text: nil, data: data, fileURL: nil)
         }
         if let data = pasteboard.data(forType: .tiff),
            let png = pngData(from: data), !png.isEmpty,
            png.count <= OmaSendConstants.maxClipboardBytes {
-            return ClipboardPayload(contentType: "image/png", text: nil, data: png)
+            return ClipboardPayload(contentType: "image/png", text: nil, data: png, fileURL: nil)
         }
         if let text = pasteboard.string(forType: .string),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            text.utf8.count <= OmaSendConstants.maxClipboardBytes {
-            return ClipboardPayload(contentType: "text/plain", text: text, data: nil)
+            return ClipboardPayload(contentType: "text/plain", text: text, data: nil, fileURL: nil)
         }
         return nil
     }
@@ -281,11 +322,18 @@ private struct ClipboardPayload {
     let contentType: String
     let text: String?
     let data: Data?
+    let fileURL: URL?
 
     var fingerprint: Data {
         var material = Data(contentType.utf8)
         if let data { material.append(data) }
         if let text { material.append(Data(text.utf8)) }
+        if let fileURL {
+            material.append(Data(fileURL.path.utf8))
+            if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) {
+                material.append(Data("\(values.fileSize ?? 0):\(values.contentModificationDate?.timeIntervalSince1970 ?? 0)".utf8))
+            }
+        }
         return Data(SHA256.hash(data: material))
     }
 }

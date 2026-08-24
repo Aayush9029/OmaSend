@@ -60,3 +60,30 @@ private let testSecret = "omasend-test-secret-0123456789-abcdef"
         try ProtocolCrypto.open(sealed, secret: testSecret)
     }
 }
+
+@Test func fileChunkRoundTrip() throws {
+    let plaintext = Data("OmaSend file chunk".utf8)
+    let payload = try ProtocolCrypto.sealFileChunk(
+        plaintext, transferId: "transfer-1", offset: 4_096, secret: testSecret
+    )
+    #expect(try ProtocolCrypto.openFileChunk(
+        payload, transferId: "transfer-1", expectedOffset: 4_096, secret: testSecret
+    ) == plaintext)
+    var tampered = payload
+    tampered[tampered.index(before: tampered.endIndex)] ^= 1
+    #expect(throws: ProtocolCryptoError.self) {
+        try ProtocolCrypto.openFileChunk(
+            tampered, transferId: "transfer-1", expectedOffset: 4_096, secret: testSecret
+        )
+    }
+}
+
+@Test func fileChunkMatchesGoVector() throws {
+    let nonce = Data((0...11).map(UInt8.init))
+    let payload = try ProtocolCrypto.sealFileChunk(
+        Data("OmaSend file chunk".utf8), transferId: "transfer-1", offset: 4_096,
+        secret: testSecret, nonceData: nonce
+    )
+    #expect(payload.map { String(format: "%02x", $0) }.joined() ==
+        "0000000000001000000102030405060708090a0b32adc977b3aae298861b94daa405389601db437066285b755d54209de91e130af412")
+}

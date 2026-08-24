@@ -3,12 +3,15 @@ package daemon
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,10 +131,16 @@ func (d *Daemon) handleConnection(ctx context.Context, connection net.Conn) {
 		return
 	case "clipboard":
 		d.receiveClipboard(ctx, message)
+	case "file_offer":
+		d.receiveFile(ctx, connection, message)
 	}
 }
 
 func (d *Daemon) localClipboardChanged(content clipboard.Content) {
+	if content.FilePath != "" {
+		go d.shareFile(content)
+		return
+	}
 	if (len(content.Text) == 0 && len(content.Data) == 0) || len(content.Text) > model.MaxClipboard || len(content.Data) > model.MaxClipboard {
 		return
 	}
@@ -149,6 +158,253 @@ func (d *Daemon) localClipboardChanged(content clipboard.Content) {
 		return
 	}
 	d.broadcast(context.Background(), message)
+}
+
+func (d *Daemon) shareFile(content clipboard.Content) {
+	info, err := os.Stat(content.FilePath)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
+		return
+	}
+	snapshot := d.store.Snapshot()
+	identity := fmt.Sprintf("%s\x00%s\x00%d\x00%d", snapshot.DeviceID, content.FilePath, info.Size(), info.ModTime().UnixNano())
+	idBytes := sha256.Sum256([]byte(identity))
+	message := d.newMessage("file", "")
+	message.ID = hex.EncodeToString(idBytes[:])
+	message.ContentType = "application/x-omasend-file"
+	message.FileName = info.Name()
+	message.FileSize = info.Size()
+	message.FilePath = content.FilePath
+	message.FileSHA256, err = hashFile(content.FilePath)
+	if err != nil {
+		return
+	}
+	item := historyItem(message, snapshot.DeviceID)
+	_, err = d.store.AddHistory(item)
+	if err != nil {
+		return
+	}
+	for _, peer := range d.activePeers(90 * time.Second) {
+		peer := peer
+		go d.sendFileWithRetry(context.Background(), peer, message)
+	}
+}
+
+func (d *Daemon) sendFileWithRetry(ctx context.Context, peer model.Peer, message model.Message) {
+	for attempt := 0; attempt < 6; attempt++ {
+		if d.sendFile(ctx, peer, message) == nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
+}
+
+func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Message) error {
+	dialer := net.Dialer{Timeout: 3 * time.Second}
+	connection, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(peer.Host, strconv.Itoa(peer.Port)))
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	_ = connection.SetDeadline(time.Now().Add(30 * time.Minute))
+	offer := message
+	offer.Type = "file_offer"
+	offer.FilePath = ""
+	sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, offer)
+	if err != nil {
+		return err
+	}
+	if err := protocol.WriteFrame(connection, sealed); err != nil {
+		return err
+	}
+	frame, err := protocol.ReadFrame(connection)
+	if err != nil {
+		return err
+	}
+	reply, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	if err != nil || reply.Type != "file_resume" || reply.ID != message.ID || reply.ResumeOffset < 0 || reply.ResumeOffset > message.FileSize {
+		return errors.New("invalid file resume response")
+	}
+	file, err := os.Open(message.FilePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if _, err := file.Seek(reply.ResumeOffset, io.SeekStart); err != nil {
+		return err
+	}
+	offset := reply.ResumeOffset
+	buffer := make([]byte, protocol.FileChunkBytes)
+	for offset < message.FileSize {
+		wanted := min(int64(len(buffer)), message.FileSize-offset)
+		count, readErr := io.ReadFull(file, buffer[:wanted])
+		if readErr != nil && readErr != io.ErrUnexpectedEOF {
+			return readErr
+		}
+		payload, sealErr := protocol.SealFileChunk(
+			d.store.Snapshot().PairingCode, message.ID, offset, buffer[:count],
+		)
+		if sealErr != nil {
+			return sealErr
+		}
+		if err := protocol.WriteFrame(connection, payload); err != nil {
+			return err
+		}
+		offset += int64(count)
+	}
+	complete := d.newMessage("file_complete", "")
+	complete.ID = message.ID
+	complete.FileSHA256 = message.FileSHA256
+	sealed, err = protocol.Seal(d.store.Snapshot().PairingCode, complete)
+	if err != nil {
+		return err
+	}
+	if err := protocol.WriteFrame(connection, sealed); err != nil {
+		return err
+	}
+	frame, err = protocol.ReadFrame(connection)
+	if err != nil {
+		return err
+	}
+	done, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	if err != nil || done.Type != "file_done" || done.ID != message.ID {
+		return errors.New("file transfer was not acknowledged")
+	}
+	return nil
+}
+
+func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer model.Message) {
+	if offer.FileName == "" || offer.FileSize <= 0 || len(offer.FileName) > 255 {
+		return
+	}
+	name := filepath.Base(strings.ReplaceAll(offer.FileName, "\\", "/"))
+	if name == "." || name == "" {
+		return
+	}
+	root := receivedFilesDirectory()
+	if os.MkdirAll(root, 0700) != nil {
+		return
+	}
+	transferHash := sha256.Sum256([]byte(offer.ID))
+	partialPath := filepath.Join(root, "."+hex.EncodeToString(transferHash[:])+".part")
+	file, err := os.OpenFile(partialPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return
+	}
+	offset := info.Size()
+	if offset > offer.FileSize {
+		if file.Truncate(0) != nil {
+			return
+		}
+		offset = 0
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return
+	}
+	_ = connection.SetDeadline(time.Now().Add(30 * time.Minute))
+	resume := d.newMessage("file_resume", "")
+	resume.ID = offer.ID
+	resume.ResumeOffset = offset
+	sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, resume)
+	if err != nil || protocol.WriteFrame(connection, sealed) != nil {
+		return
+	}
+	for offset < offer.FileSize {
+		frame, readErr := protocol.ReadFrame(connection)
+		if readErr != nil {
+			return
+		}
+		chunk, openErr := protocol.OpenFileChunk(d.store.Snapshot().PairingCode, offer.ID, offset, frame)
+		if openErr != nil || int64(len(chunk)) > offer.FileSize-offset {
+			return
+		}
+		if _, err := file.Write(chunk); err != nil {
+			return
+		}
+		offset += int64(len(chunk))
+	}
+	if err := file.Sync(); err != nil {
+		return
+	}
+	frame, err := protocol.ReadFrame(connection)
+	if err != nil {
+		return
+	}
+	complete, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	if err != nil || complete.Type != "file_complete" || complete.ID != offer.ID || complete.FileSHA256 == "" {
+		return
+	}
+	actualHash, err := hashFile(partialPath)
+	if err != nil || actualHash != complete.FileSHA256 {
+		return
+	}
+	finalPath := availableFilePath(root, name)
+	if err := os.Rename(partialPath, finalPath); err != nil {
+		return
+	}
+	message := offer
+	message.Type = "file"
+	message.FilePath = finalPath
+	message.FileSHA256 = actualHash
+	item := historyItem(message, d.store.Snapshot().DeviceID)
+	added, err := d.store.AddHistory(item)
+	if err == nil && added && d.store.Snapshot().AutoCopy {
+		writeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		_ = d.clip.Write(writeCtx, clipboard.Content{ContentType: message.ContentType, FilePath: finalPath})
+		cancel()
+	}
+	done := d.newMessage("file_done", "")
+	done.ID = offer.ID
+	if sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, done); err == nil {
+		_ = protocol.WriteFrame(connection, sealed)
+	}
+}
+
+func hashFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func receivedFilesDirectory() string {
+	if value := strings.TrimSpace(os.Getenv("OMASEND_DOWNLOADS")); value != "" {
+		return value
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.TempDir()
+	}
+	return filepath.Join(home, "Downloads", "OmaSend")
+}
+
+func availableFilePath(root, name string) string {
+	path := filepath.Join(root, name)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return path
+	}
+	extension := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, extension)
+	for index := 2; ; index++ {
+		candidate := filepath.Join(root, fmt.Sprintf("%s %d%s", stem, index, extension))
+		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate
+		}
+	}
 }
 
 func (d *Daemon) receiveClipboard(ctx context.Context, message model.Message) {
@@ -302,7 +558,7 @@ func (d *Daemon) handleIPC(request ipc.Request) ipc.Response {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		data, _ := base64.StdEncoding.DecodeString(item.Data)
-		if err := d.clip.Write(ctx, clipboard.Content{ContentType: item.ContentType, Text: item.Text, Data: data}); err != nil {
+		if err := d.clip.Write(ctx, clipboard.Content{ContentType: item.ContentType, Text: item.Text, Data: data, FilePath: item.FilePath}); err != nil {
 			return ipc.Response{OK: false, Error: err.Error()}
 		}
 		return ipc.Response{OK: true}
@@ -316,6 +572,7 @@ func historyItem(message model.Message, localID string) model.HistoryItem {
 		ID: message.ID, Text: message.Text, OriginID: message.OriginID,
 		OriginName: message.OriginName, CreatedAt: message.CreatedAt,
 		IsLocal: message.OriginID == localID, ContentType: message.ContentType, Data: message.Data,
+		FileName: message.FileName, FileSize: message.FileSize, FilePath: message.FilePath,
 	}
 	if item.IsImage() {
 		item.Thumbnail = model.ImageThumbnail(item.Data)
@@ -325,5 +582,5 @@ func historyItem(message model.Message, localID string) model.HistoryItem {
 
 func clipboardContent(message model.Message) clipboard.Content {
 	data, _ := base64.StdEncoding.DecodeString(message.Data)
-	return clipboard.Content{ContentType: message.ContentType, Text: message.Text, Data: data}
+	return clipboard.Content{ContentType: message.ContentType, Text: message.Text, Data: data, FilePath: message.FilePath}
 }

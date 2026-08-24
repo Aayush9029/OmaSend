@@ -28,9 +28,18 @@ The outer JSON envelope is:
 
 The authenticated plaintext includes a unique item ID, sender ID and name, timestamp, optional UTF-8 text, optional MIME type, and optional base64 image data.
 
+## Files
+
+Files use a separate direct TCP stream and are not subject to the clipboard item limit. The sender opens with an encrypted `file_offer` containing the safe file name and 64-bit size. The receiver keeps a private partial file and answers with its current byte offset.
+
+File contents are split into 1 MiB binary chunks. Each chunk is encrypted independently with AES-256-GCM, a fresh nonce, and authenticated data containing `omasend-file-v1`, the transfer ID, and the 64-bit byte offset. Binary chunks avoid base64 overhead. A dropped connection is retried from the receiver's saved offset.
+
+After the final chunk, the sender provides the full SHA-256 digest in an encrypted `file_complete` message. The receiver verifies it before moving the file into `Downloads/OmaSend` and acknowledging completion.
+
 ## Limits
 
-- Clipboard item: 10 MiB decoded
+- Text or image clipboard item: 10 MiB decoded
+- File: 64-bit streamed size, bounded by available disk space
 - History: 50 items
 - Persisted history data: 50 MiB
 - Accepted images: PNG, JPEG, and GIF on Linux; images are normalized to PNG on macOS

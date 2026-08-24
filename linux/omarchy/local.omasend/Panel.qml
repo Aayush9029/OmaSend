@@ -192,7 +192,7 @@ Panel {
               }
               Text {
                 visible: String(history[index].thumbnail || "") === ""
-                text: history[index].isLocal ? "󰌢" : "󰅇"
+                text: String(history[index].filePath || "") !== "" ? "󰈔" : (history[index].isLocal ? "󰌢" : "󰅇")
                 color: history[index].isLocal ? root.muted : root.accent
                 font.family: "JetBrainsMono Nerd Font"
                 font.pixelSize: Style.font.title
@@ -200,7 +200,7 @@ Panel {
                 horizontalAlignment: Text.AlignHCenter
               }
               Text {
-                text: String(history[index].thumbnail || "") !== "" ? "Image" : root.preview(history[index].text)
+                text: String(history[index].thumbnail || "") !== "" ? "Image" : (String(history[index].fileName || "") !== "" ? String(history[index].fileName) : root.preview(history[index].text))
                 color: root.foreground
                 font.family: bar ? bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.body

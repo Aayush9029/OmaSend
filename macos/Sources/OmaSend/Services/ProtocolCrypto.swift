@@ -20,6 +20,7 @@ enum ProtocolCryptoError: Error, LocalizedError {
 
 enum ProtocolCrypto {
     private static let additionalData = Data("omasend-v1".utf8)
+    private static let fileAdditionalData = Data("omasend-file-v1".utf8)
 
     static func seal(_ message: WireMessage, secret: String, nonceData: Data? = nil) throws -> Data {
         guard secret.count >= 20 else { throw ProtocolCryptoError.pairingCodeTooShort }
@@ -106,5 +107,54 @@ enum ProtocolCrypto {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+
+    static func sealFileChunk(
+        _ plaintext: Data, transferId: String, offset: Int64,
+        secret: String, nonceData: Data? = nil
+    ) throws -> Data {
+        guard secret.count >= 20, offset >= 0, !plaintext.isEmpty,
+              plaintext.count <= OmaSendConstants.fileChunkBytes
+        else { throw ProtocolCryptoError.invalidMessage }
+        let key = SymmetricKey(data: SHA256.hash(data: Data(secret.utf8)))
+        var bigOffset = UInt64(offset).bigEndian
+        let offsetData = Data(bytes: &bigOffset, count: MemoryLayout<UInt64>.size)
+        let aad = fileAdditionalData + Data(transferId.utf8) + offsetData
+        let sealed: AES.GCM.SealedBox
+        if let nonceData {
+            sealed = try AES.GCM.seal(
+                plaintext, using: key, nonce: AES.GCM.Nonce(data: nonceData), authenticating: aad
+            )
+        } else {
+            sealed = try AES.GCM.seal(plaintext, using: key, authenticating: aad)
+        }
+        return offsetData + Data(sealed.nonce) + sealed.ciphertext + sealed.tag
+    }
+
+    static func openFileChunk(
+        _ payload: Data, transferId: String, expectedOffset: Int64, secret: String
+    ) throws -> Data {
+        guard secret.count >= 20,
+              payload.count > MemoryLayout<UInt64>.size + 12 + 16
+        else { throw ProtocolCryptoError.invalidMessage }
+        let offset = payload.prefix(8).withUnsafeBytes {
+            Int64(UInt64(bigEndian: $0.loadUnaligned(as: UInt64.self)))
+        }
+        guard offset == expectedOffset else { throw ProtocolCryptoError.invalidMessage }
+        let nonce = payload.subdata(in: 8..<20)
+        let combined = payload.dropFirst(20)
+        let ciphertext = combined.dropLast(16)
+        let tag = combined.suffix(16)
+        var bigOffset = UInt64(offset).bigEndian
+        let offsetData = Data(bytes: &bigOffset, count: MemoryLayout<UInt64>.size)
+        let aad = fileAdditionalData + Data(transferId.utf8) + offsetData
+        let box = try AES.GCM.SealedBox(
+            nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext, tag: tag
+        )
+        do {
+            return try AES.GCM.open(box, using: SymmetricKey(data: SHA256.hash(data: Data(secret.utf8))), authenticating: aad)
+        } catch {
+            throw ProtocolCryptoError.authenticationFailed
+        }
     }
 }

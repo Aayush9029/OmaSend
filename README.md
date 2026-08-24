@@ -25,6 +25,6 @@ curl -fsSL https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.sh 
 
 Run `omasend pair show`, then enter the code in **OmaSend Settings > Devices** on your Mac.
 
-Text and images travel directly over your local network or Tailscale with AES-256-GCM encryption. No cloud or account.
+Text, images, and files travel directly over your local network or Tailscale with AES-256-GCM encryption. No cloud or account.
 
 [MIT](LICENSE) · [Protocol](PROTOCOL.md)

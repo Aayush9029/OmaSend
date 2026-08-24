@@ -12,15 +12,20 @@ const (
 )
 
 type Message struct {
-	Version     int    `json:"version"`
-	Type        string `json:"type"`
-	ID          string `json:"id"`
-	OriginID    string `json:"originId"`
-	OriginName  string `json:"originName"`
-	CreatedAt   int64  `json:"createdAt"`
-	Text        string `json:"text,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	Data        string `json:"data,omitempty"`
+	Version      int    `json:"version"`
+	Type         string `json:"type"`
+	ID           string `json:"id"`
+	OriginID     string `json:"originId"`
+	OriginName   string `json:"originName"`
+	CreatedAt    int64  `json:"createdAt"`
+	Text         string `json:"text,omitempty"`
+	ContentType  string `json:"contentType,omitempty"`
+	Data         string `json:"data,omitempty"`
+	FileName     string `json:"fileName,omitempty"`
+	FileSize     int64  `json:"fileSize,omitempty"`
+	FileSHA256   string `json:"fileSHA256,omitempty"`
+	ResumeOffset int64  `json:"resumeOffset,omitempty"`
+	FilePath     string `json:"filePath,omitempty"`
 }
 
 type Envelope struct {
@@ -39,14 +44,19 @@ type HistoryItem struct {
 	ContentType string `json:"contentType,omitempty"`
 	Data        string `json:"data,omitempty"`
 	Thumbnail   string `json:"thumbnail,omitempty"`
+	FileName    string `json:"fileName,omitempty"`
+	FileSize    int64  `json:"fileSize,omitempty"`
+	FilePath    string `json:"filePath,omitempty"`
 }
 
 func (item HistoryItem) IsImage() bool {
 	return len(item.ContentType) > 6 && item.ContentType[:6] == "image/"
 }
 
+func (item HistoryItem) IsFile() bool { return item.FileName != "" && item.FilePath != "" }
+
 func (item HistoryItem) ApproximateBytes() int {
-	return len(item.Text) + len(item.Data)*3/4 + len(item.Thumbnail)*3/4
+	return len(item.Text) + len(item.Data)*3/4 + len(item.Thumbnail)*3/4 + len(item.FileName) + len(item.FilePath)
 }
 
 type Peer struct {

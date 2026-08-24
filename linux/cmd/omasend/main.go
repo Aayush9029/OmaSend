@@ -75,6 +75,8 @@ func run(arguments []string) error {
 			preview := strings.ReplaceAll(item.Text, "\n", " ")
 			if item.IsImage() {
 				preview = "[Image]"
+			} else if item.IsFile() {
+				preview = "[File] " + item.FileName
 			}
 			if len([]rune(preview)) > 70 {
 				preview = string([]rune(preview)[:67]) + "..."

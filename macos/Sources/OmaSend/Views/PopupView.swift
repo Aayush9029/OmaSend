@@ -137,6 +137,12 @@ private struct ClipboardHistoryRow: View {
                 platformIcon
                     .frame(width: 22, height: 34, alignment: .center)
 
+                if item.isFile {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+
                 Text(item.preview)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)

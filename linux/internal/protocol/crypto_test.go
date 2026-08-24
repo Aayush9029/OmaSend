@@ -82,3 +82,22 @@ func TestWrongSecretRejected(t *testing.T) {
 		t.Fatal("expected authentication failure")
 	}
 }
+
+func TestFileChunkRoundTrip(t *testing.T) {
+	plaintext := []byte("OmaSend file chunk")
+	payload, err := SealFileChunk(testSecret, "transfer-1", 4096, plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := OpenFileChunk(testSecret, "transfer-1", 4096, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(opened) != string(plaintext) {
+		t.Fatalf("file chunk mismatch: %q", opened)
+	}
+	payload[len(payload)-1] ^= 1
+	if _, err := OpenFileChunk(testSecret, "transfer-1", 4096, payload); err == nil {
+		t.Fatal("expected tampered file chunk to be rejected")
+	}
+}
