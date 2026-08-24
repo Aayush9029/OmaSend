@@ -1,0 +1,9 @@
+/.build/
+/dist/*.tar.gz
+/dist/*.zip
+/dist/*.dmg
+/macos/.build/
+/macos/dist/
+/linux/omasend
+.DS_Store
+

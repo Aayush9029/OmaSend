@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "local.omasend",
+  "name": "OmaSend",
+  "version": "0.1.0",
+  "author": "Aayush Pokharel",
+  "license": "MIT",
+  "description": "Encrypted clipboard history shared with your Mac.",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Panel.qml" },
+  "barWidget": {
+    "displayName": "OmaSend",
+    "description": "See devices and copy from shared clipboard history.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": { "command": "omasend", "refreshIntervalMs": 1500 },
+    "schema": [
+      {
+        "key": "refreshIntervalMs",
+        "type": "integer",
+        "label": "Refresh interval (milliseconds)",
+        "min": 750,
+        "max": 10000,
+        "step": 250,
+        "defaultValue": 1500
+      }
+    ]
+  }
+}
+
