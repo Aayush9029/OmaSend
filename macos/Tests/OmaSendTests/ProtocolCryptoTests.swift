@@ -27,7 +27,7 @@ private let testSecret = "omasend-test-secret-0123456789-abcdef"
 }
 
 @Test func imageRoundTrip() throws {
-    let pixels = Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    let pixels = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")!
     let message = WireMessage(
         version: 1, type: "clipboard", id: "image-1", originId: "mac",
         originName: "Mac", createdAt: 43, text: nil,
@@ -36,6 +36,17 @@ private let testSecret = "omasend-test-secret-0123456789-abcdef"
     let sealed = try ProtocolCrypto.seal(message, secret: testSecret)
     let opened = try ProtocolCrypto.open(sealed, secret: testSecret)
     #expect(opened == message)
+}
+
+@Test func rejectsEmptyClipboardItem() throws {
+    let message = WireMessage(
+        version: 1, type: "clipboard", id: "empty-1", originId: "mac",
+        originName: "Mac", createdAt: 45, text: "  \n"
+    )
+    let sealed = try ProtocolCrypto.seal(message, secret: testSecret)
+    #expect(throws: ProtocolCryptoError.self) {
+        try ProtocolCrypto.open(sealed, secret: testSecret)
+    }
 }
 
 @Test func rejectsInvalidImageEncoding() throws {

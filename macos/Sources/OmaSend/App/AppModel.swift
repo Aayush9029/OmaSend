@@ -155,8 +155,15 @@ final class AppModel {
 
     @discardableResult
     private func add(_ message: WireMessage) -> Bool {
-        let isImage = message.contentType?.hasPrefix("image/") == true && message.data != nil
-        guard (message.text != nil || isImage), !history.contains(where: { $0.id == message.id }) else { return false }
+        let hasText = message.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let isImage: Bool = {
+            guard message.contentType?.hasPrefix("image/") == true,
+                  let encoded = message.data,
+                  let data = Data(base64Encoded: encoded)
+            else { return false }
+            return NSImage(data: data) != nil
+        }()
+        guard (hasText || isImage), !history.contains(where: { $0.id == message.id }) else { return false }
         let item = ClipboardItem(
             id: message.id, text: message.text ?? "", originId: message.originId,
             originName: message.originName, createdAt: message.createdAt,
@@ -220,14 +227,17 @@ final class AppModel {
 
     private func readPasteboard() -> ClipboardPayload? {
         let pasteboard = NSPasteboard.general
-        if let data = pasteboard.data(forType: .png), data.count <= OmaSendConstants.maxClipboardBytes {
+        if let data = pasteboard.data(forType: .png), !data.isEmpty,
+           data.count <= OmaSendConstants.maxClipboardBytes {
             return ClipboardPayload(contentType: "image/png", text: nil, data: data)
         }
         if let data = pasteboard.data(forType: .tiff),
-           let png = pngData(from: data), png.count <= OmaSendConstants.maxClipboardBytes {
+           let png = pngData(from: data), !png.isEmpty,
+           png.count <= OmaSendConstants.maxClipboardBytes {
             return ClipboardPayload(contentType: "image/png", text: nil, data: png)
         }
-        if let text = pasteboard.string(forType: .string), !text.isEmpty,
+        if let text = pasteboard.string(forType: .string),
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            text.utf8.count <= OmaSendConstants.maxClipboardBytes {
             return ClipboardPayload(contentType: "text/plain", text: text, data: nil)
         }

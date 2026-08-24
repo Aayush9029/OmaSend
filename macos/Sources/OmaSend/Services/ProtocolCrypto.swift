@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import ImageIO
 
 enum ProtocolCryptoError: Error, LocalizedError {
     case pairingCodeTooShort
@@ -63,9 +64,25 @@ enum ProtocolCrypto {
               !message.id.isEmpty,
               !message.originId.isEmpty,
               (message.text?.utf8.count ?? 0) <= OmaSendConstants.maxClipboardBytes,
-              validClipboardData(message.data)
+              validClipboardData(message.data),
+              message.type != "clipboard" || validClipboardContent(message)
         else { throw ProtocolCryptoError.invalidMessage }
         return message
+    }
+
+    private static func validClipboardContent(_ message: WireMessage) -> Bool {
+        if let text = message.text,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           message.contentType == nil || message.contentType?.hasPrefix("text/") == true {
+            return true
+        }
+        guard let contentType = message.contentType,
+              ["image/png", "image/jpeg", "image/gif"].contains(contentType),
+              let encoded = message.data,
+              let data = Data(base64Encoded: encoded),
+              !data.isEmpty
+        else { return false }
+        return CGImageSourceCreateWithData(data as CFData, nil) != nil
     }
 
     private static func validClipboardData(_ encoded: String?) -> Bool {

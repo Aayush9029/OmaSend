@@ -140,6 +140,9 @@ func (d *Daemon) localClipboardChanged(content clipboard.Content) {
 	if len(content.Data) > 0 {
 		message.Data = base64.StdEncoding.EncodeToString(content.Data)
 	}
+	if !model.ValidClipboard(message) {
+		return
+	}
 	item := historyItem(message, d.store.Snapshot().DeviceID)
 	added, err := d.store.AddHistory(item)
 	if err != nil || !added {
@@ -149,6 +152,9 @@ func (d *Daemon) localClipboardChanged(content clipboard.Content) {
 }
 
 func (d *Daemon) receiveClipboard(ctx context.Context, message model.Message) {
+	if !model.ValidClipboard(message) {
+		return
+	}
 	item := historyItem(message, d.store.Snapshot().DeviceID)
 	added, err := d.store.AddHistory(item)
 	if err != nil || !added {

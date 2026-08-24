@@ -39,6 +39,9 @@ func (w *Wayland) Read(ctx context.Context) (Content, error) {
 			if len(output) > maxClipboard {
 				return Content{}, errors.New("clipboard image is too large")
 			}
+			if len(output) == 0 {
+				return Content{}, errors.New("clipboard image is empty")
+			}
 			return Content{ContentType: wanted, Data: output}, nil
 		}
 	}
@@ -48,6 +51,9 @@ func (w *Wayland) Read(ctx context.Context) (Content, error) {
 	}
 	if len(output) > maxClipboard {
 		return Content{}, errors.New("clipboard is too large")
+	}
+	if strings.TrimSpace(string(output)) == "" {
+		return Content{}, errors.New("clipboard is empty")
 	}
 	return Content{ContentType: "text/plain", Text: string(output)}, nil
 }

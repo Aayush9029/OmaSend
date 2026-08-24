@@ -94,6 +94,9 @@ func Open(secret string, data []byte) (model.Message, error) {
 			return model.Message{}, errors.New("clipboard image is invalid or too large")
 		}
 	}
+	if message.Type == "clipboard" && !model.ValidClipboard(message) {
+		return model.Message{}, errors.New("clipboard item is empty or unsupported")
+	}
 	return message, nil
 }
 

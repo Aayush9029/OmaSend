@@ -49,7 +49,9 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
 PLIST
 
 SIGN_IDENTITY="${OMASEND_SIGN_IDENTITY:--}"
-codesign --force --options runtime --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
+SIGN_ARGS=(--force --options runtime --sign "${SIGN_IDENTITY}")
+if [[ "${SIGN_IDENTITY}" != "-" ]]; then SIGN_ARGS+=(--timestamp); fi
+codesign "${SIGN_ARGS[@]}" "${APP_BUNDLE}"
 
 open_app() { /usr/bin/open -n "${APP_BUNDLE}"; }
 case "${MODE}" in

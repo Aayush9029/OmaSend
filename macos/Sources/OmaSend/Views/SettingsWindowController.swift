@@ -8,10 +8,10 @@ final class SettingsWindowController {
     init(model: AppModel) {
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         window = NSWindow(contentViewController: hosting)
-        window.title = "OmaSend Settings"
+        window.title = ""
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
-        window.titleVisibility = .visible
+        window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -25,4 +25,3 @@ final class SettingsWindowController {
         window.makeKeyAndOrderFront(nil)
     }
 }
-

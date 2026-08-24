@@ -7,7 +7,29 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
+	"strings"
 )
+
+func ValidClipboard(message Message) bool {
+	if strings.TrimSpace(message.Text) != "" &&
+		(message.ContentType == "" || strings.HasPrefix(message.ContentType, "text/")) {
+		return true
+	}
+	if message.Data == "" || (message.ContentType != "image/png" &&
+		message.ContentType != "image/jpeg" && message.ContentType != "image/gif") {
+		return false
+	}
+	data, err := base64.StdEncoding.DecodeString(message.Data)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	_, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	expected := map[string]string{"png": "image/png", "jpeg": "image/jpeg", "gif": "image/gif"}
+	return expected[format] == message.ContentType
+}
 
 func ImageThumbnail(encoded string) string {
 	data, err := base64.StdEncoding.DecodeString(encoded)

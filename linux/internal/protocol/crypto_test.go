@@ -26,7 +26,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestImageRoundTrip(t *testing.T) {
-	pixels := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}
+	pixels, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
 	message := model.Message{
 		Version: 1, Type: "clipboard", ID: "image-1", OriginID: "linux",
 		OriginName: "Framework", CreatedAt: 43, ContentType: "image/png",
@@ -42,6 +42,17 @@ func TestImageRoundTrip(t *testing.T) {
 	}
 	if opened != message {
 		t.Fatalf("image round trip mismatch: %#v", opened)
+	}
+}
+
+func TestEmptyClipboardRejected(t *testing.T) {
+	message := model.Message{Version: 1, Type: "clipboard", ID: "empty-1", OriginID: "linux", OriginName: "Framework", CreatedAt: 45, Text: "  \n"}
+	sealed, err := Seal(testSecret, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(testSecret, sealed); err == nil {
+		t.Fatal("expected empty clipboard item to be rejected")
 	}
 }
 

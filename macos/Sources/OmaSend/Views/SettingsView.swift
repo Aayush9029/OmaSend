@@ -22,7 +22,7 @@ struct SettingsView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsSidebarSection(
-                title: "OmaSend",
+                title: nil,
                 tabs: [.general, .menuBar, .clipboard],
                 selected: selectedTab,
                 onSelect: select

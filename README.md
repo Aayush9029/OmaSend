@@ -1,86 +1,36 @@
-# OmaSend
+<p align="center">
+  <img src="assets/AppIcon.png" width="88" alt="OmaSend clipboard icon">
+</p>
 
-OmaSend is a native shared clipboard for macOS and Linux. It discovers paired computers on your local network, keeps a shared clipboard history, and can automatically place incoming text and images on the system clipboard.
+<h1 align="center">OmaSend</h1>
 
-![OmaSend icon](assets/AppIcon.png)
+<p align="center">One clipboard across macOS and Omarchy.</p>
 
-## Features
+<p align="center">
+  <img src="assets/screenshots/omasend-macos.png" width="330" alt="OmaSend on macOS">
+  <img src="assets/screenshots/omasend-linux.png" width="375" alt="OmaSend on Omarchy">
+</p>
 
-- Native macOS menu bar app built with SwiftUI and AppKit
-- Native Omarchy bar panel plus a small Linux CLI and service
-- Text and image clipboard sharing with thumbnail previews
-- Optional Auto Copy on each computer
-- Bonjour discovery on a local network
-- Direct Tailscale peer discovery when the Tailscale CLI is available
-- AES-256-GCM authenticated encryption using a shared pairing code
-- No cloud service, account, analytics, or relay
+<p align="center">
+  <img src="assets/screenshots/omasend-settings.png" width="760" alt="OmaSend settings on macOS">
+</p>
 
-## Install on macOS
+## Install
 
-Download `OmaSend_0.1.0_macOS_arm64.dmg` from the latest release, open it, and drag OmaSend to Applications.
+### [macOS](https://github.com/Aayush9029/OmaSend/releases/latest)
 
-OmaSend requires macOS 15 or newer on Apple silicon.
+[Open the latest GitHub Release, then drag OmaSend into Applications.](https://github.com/Aayush9029/OmaSend/releases/latest)
 
-## Install on Arch Linux or Omarchy
+### Linux and Omarchy
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.sh | bash
 ```
 
-The installer places `omasend` in `~/.local/bin`, enables the user service, and installs the OmaSend bar panel when Omarchy Shell is present.
+## Pair
 
-Required Linux packages:
+Run `omasend pair show`, then enter the code in **OmaSend Settings > Devices** on your Mac.
 
-```bash
-sudo pacman -S wl-clipboard
-```
+Text and images travel directly over your local network or Tailscale with AES-256-GCM encryption. No cloud or account.
 
-## Pair the computers
-
-1. On Linux, run `omasend pair show`.
-2. On the Mac, open OmaSend Settings, choose Devices, and select Pair Another Device.
-3. Enter the Linux pairing code.
-
-Both apps reconnect automatically. The same pairing code works over the local network and Tailscale.
-
-## Auto Copy
-
-Clipboard history is always shared. Auto Copy only controls whether a received item immediately replaces the current system clipboard.
-
-Turn it on from either menu, or on Linux run:
-
-```bash
-omasend auto on
-```
-
-## Linux CLI
-
-```text
-omasend status
-omasend history
-omasend auto <on|off>
-omasend copy <item-id>
-omasend pair <show|copy|set|regenerate>
-```
-
-## Build from source
-
-Linux:
-
-```bash
-./scripts/build-linux.sh
-```
-
-macOS:
-
-```bash
-cd macos
-swift test
-./script/build_and_run.sh
-```
-
-See [PROTOCOL.md](PROTOCOL.md) for the wire format and security model.
-
-## License
-
-MIT
+[MIT](LICENSE) · [Protocol](PROTOCOL.md)

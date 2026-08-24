@@ -26,17 +26,19 @@ struct SettingsSidebarRow: View {
 }
 
 struct SettingsSidebarSection: View {
-    let title: String
+    let title: String?
     let tabs: [SettingsTab]
     let selected: SettingsTab
     let onSelect: (SettingsTab) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.headline)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
+            if let title {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
 
             VStack(spacing: 6) {
                 ForEach(tabs) { tab in
