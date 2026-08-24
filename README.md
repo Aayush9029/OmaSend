@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="assets/screenshots/omasend-macos.png" width="330" alt="OmaSend on macOS">
-  <img src="assets/screenshots/omasend-linux.png" width="375" alt="OmaSend on Omarchy">
+  <img src="assets/screenshots/omasend-linux.png" width="330" alt="OmaSend on Omarchy">
 </p>
 
 <p align="center">
