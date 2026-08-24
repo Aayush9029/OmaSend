@@ -11,15 +11,9 @@
   <img src="assets/screenshots/omasend-linux.png" width="330" alt="OmaSend on Omarchy">
 </p>
 
-<p align="center">
-  <img src="assets/screenshots/omasend-settings.png" width="760" alt="OmaSend settings on macOS">
-</p>
-
 ## Install
 
 ### [macOS](https://github.com/Aayush9029/OmaSend/releases/latest)
-
-[Open the latest GitHub Release, then drag OmaSend into Applications.](https://github.com/Aayush9029/OmaSend/releases/latest)
 
 ### Linux and Omarchy
 
