@@ -3,6 +3,23 @@ import CryptoKit
 import Observation
 import ServiceManagement
 
+enum TransferDirection: Equatable {
+    case outgoing
+    case incoming
+
+    var barIndices: [Int] {
+        switch self {
+        case .outgoing: Array(0..<9)
+        case .incoming: Array((0..<9).reversed())
+        }
+    }
+}
+
+struct TransferPulse: Equatable, Identifiable {
+    let id = UUID()
+    let direction: TransferDirection
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -14,6 +31,7 @@ final class AppModel {
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
     private(set) var showsDockIcon: Bool
     private(set) var menuBarStyle: MenuBarStyle
+    private(set) var transferPulse: TransferPulse?
     var settingsTab: SettingsTab? = .general
 
     private var configuration: AppConfiguration
@@ -22,7 +40,9 @@ final class AppModel {
     private var pasteboardTimer: Timer?
     private var pasteboardChangeCount = NSPasteboard.general.changeCount
     private var lastClipboardFingerprint: Data?
+    private var isPopupVisible = false
     @ObservationIgnored private var settingsWindow: SettingsWindowController?
+    @ObservationIgnored private var transferPulseTask: Task<Void, Never>?
 
     init(store: ConfigurationStore = ConfigurationStore(), network: NetworkService = NetworkService()) {
         self.store = store
@@ -88,6 +108,13 @@ final class AppModel {
         writePasteboard(configuration.pairingCode)
     }
 
+    func setPopupVisible(_ visible: Bool) {
+        isPopupVisible = visible
+        guard !visible else { return }
+        transferPulseTask?.cancel()
+        transferPulse = nil
+    }
+
     func promptForPairingCode() {
         let alert = NSAlert()
         alert.messageText = "Pair Another Device"
@@ -145,19 +172,35 @@ final class AppModel {
         if let fileURL = payload.fileURL {
             let message = makeFileMessage(fileURL)
             add(message)
+            showTransferPulse(.outgoing)
             network.broadcastFile(fileURL, message: message)
             return
         }
         let message = makeMessage(payload: payload)
         add(message)
+        showTransferPulse(.outgoing)
         network.broadcast(message)
     }
 
     private func receive(_ message: WireMessage) {
         guard (message.type == "clipboard" || message.type == "file"),
               message.originId != configuration.deviceId else { return }
-        guard add(message), autoCopy else { return }
-        writePasteboard(message)
+        guard add(message) else { return }
+        showTransferPulse(.incoming)
+        if autoCopy { writePasteboard(message) }
+    }
+
+    private func showTransferPulse(_ direction: TransferDirection) {
+        guard isPopupVisible, !peers.isEmpty else { return }
+        transferPulseTask?.cancel()
+        let pulse = TransferPulse(direction: direction)
+        transferPulse = pulse
+        transferPulseTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 850_000_000) }
+            catch { return }
+            guard self?.transferPulse?.id == pulse.id else { return }
+            self?.transferPulse = nil
+        }
     }
 
     @discardableResult

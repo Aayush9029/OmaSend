@@ -70,6 +70,8 @@ struct PopupView: View {
 
 private struct ClipboardSummaryCard: View {
     let model: AppModel
+    @State private var activeBar = 4
+    @State private var isPulsing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -102,11 +104,41 @@ private struct ClipboardSummaryCard: View {
         HStack(spacing: 3) {
             ForEach(0..<9, id: \.self) { index in
                 Capsule()
-                    .fill(index == 4 && !model.peers.isEmpty ? Color.blue : Color.primary.opacity(0.13))
+                    .fill(barColor(at: index))
                     .frame(width: index == 4 ? 14 : 7, height: 4)
+                    .scaleEffect(y: isPulsing && index == activeBar ? 1.45 : 1)
             }
         }
         .frame(maxWidth: .infinity)
+        .task(id: model.transferPulse?.id) {
+            guard let pulse = model.transferPulse else {
+                isPulsing = false
+                activeBar = 4
+                return
+            }
+            isPulsing = true
+            for index in pulse.direction.barIndices {
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.08)) { activeBar = index }
+                do { try await Task.sleep(nanoseconds: 65_000_000) }
+                catch { return }
+            }
+            do { try await Task.sleep(nanoseconds: 90_000_000) }
+            catch { return }
+            withAnimation(.easeOut(duration: 0.14)) {
+                isPulsing = false
+                activeBar = 4
+            }
+        }
+    }
+
+    private func barColor(at index: Int) -> Color {
+        if isPulsing {
+            if index == activeBar { return .blue }
+            if abs(index - activeBar) == 1 { return .blue.opacity(0.34) }
+            return .primary.opacity(0.13)
+        }
+        return index == 4 && !model.peers.isEmpty ? .blue : .primary.opacity(0.13)
     }
 
     private var connectedNames: String {

@@ -4,6 +4,11 @@ import Testing
 
 private let testSecret = "omasend-test-secret-0123456789-abcdef"
 
+@Test func transferPulseDirections() {
+    #expect(TransferDirection.outgoing.barIndices == Array(0..<9))
+    #expect(TransferDirection.incoming.barIndices == Array((0..<9).reversed()))
+}
+
 @Test func roundTrip() throws {
     let message = WireMessage(version: 1, type: "clipboard", id: "item-1", originId: "mac", originName: "Mac", createdAt: 42, text: "hello 👋")
     let sealed = try ProtocolCrypto.seal(message, secret: testSecret)
