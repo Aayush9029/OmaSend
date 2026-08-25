@@ -59,7 +59,6 @@ final class AppModel {
 
     func start() {
         applyActivationPolicy()
-        backfillFileThumbnails()
         lastClipboardFingerprint = readPasteboard()?.fingerprint
         network.onMessage = { [weak self] message in self?.receive(message) }
         network.onPeersChanged = { [weak self] peers in self?.peers = peers }
@@ -370,20 +369,6 @@ final class AppModel {
               let png = NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:])
         else { return nil }
         return png.base64EncodedString()
-    }
-
-    private func backfillFileThumbnails() {
-        var changed = false
-        for index in history.indices where history[index].thumbnail?.isEmpty != false {
-            guard let filePath = history[index].filePath,
-                  let thumbnail = thumbnailBase64(from: nil, filePath: filePath)
-            else { continue }
-            history[index].thumbnail = thumbnail
-            changed = true
-        }
-        guard changed else { return }
-        configuration.history = history
-        persist()
     }
 
     private func persist() {
