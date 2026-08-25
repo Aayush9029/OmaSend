@@ -33,7 +33,11 @@ tar -xzf "${temporary_root}/${archive}" -C "${temporary_root}"
 install -Dm755 "${temporary_root}/omasend" "${INSTALL_ROOT}/bin/omasend"
 install -Dm644 "${temporary_root}/packaging/systemd/omasend.service" "${SYSTEMD_ROOT}/omasend.service"
 systemctl --user daemon-reload
-systemctl --user enable --now omasend.service
+# Drop enablement symlinks from older releases that started the daemon
+# before the graphical session imported WAYLAND_DISPLAY
+systemctl --user disable omasend.service >/dev/null 2>&1 || true
+systemctl --user enable omasend.service
+systemctl --user restart omasend.service
 
 if command -v omarchy >/dev/null && command -v omarchy-shell >/dev/null; then
   install -Dm644 "${temporary_root}/omarchy/local.omasend/manifest.json" "${OMARCHY_ROOT}/manifest.json"
