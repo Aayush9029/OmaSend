@@ -45,6 +45,11 @@ Panel {
     actionProc.command = commandFor(["pair", "copy"])
     actionProc.running = true
   }
+  function clearHistory() {
+    if (actionProc.running) return
+    actionProc.command = commandFor(["clear", "--json"])
+    actionProc.running = true
+  }
   function preview(value) {
     var text = String(value || "").replace(/\s+/g, " ").trim()
     return text.length > 72 ? text.slice(0, 69) + "..." : text
@@ -102,7 +107,7 @@ Panel {
     activeColor: "#ffffff"
     active: root.peerCount > 0
     tooltipText: root.stateText()
-    onPressed: function(mouseButton) { if (mouseButton === Qt.MiddleButton) root.setAuto(!root.status.autoCopy); else root.toggle() }
+    onPressed: function(mouseButton) { if (mouseButton === Qt.MiddleButton) root.setAuto(!root.status.autoCopy); else if (mouseButton === Qt.RightButton) root.clearHistory(); else root.toggle() }
   }
 
   KeyboardPanel {

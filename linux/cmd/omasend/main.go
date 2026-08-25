@@ -104,6 +104,15 @@ func run(arguments []string) error {
 		}
 		_, err := ipc.Call(socket, ipc.Request{Action: "copy", ItemID: arguments[1]})
 		return unavailable(err)
+	case "clear":
+		_, err := ipc.Call(socket, ipc.Request{Action: "clear"})
+		if err != nil {
+			return unavailable(err)
+		}
+		if !jsonOutput {
+			fmt.Println("Clipboard history cleared on all devices")
+		}
+		return nil
 	case "pair":
 		return runPair(socket, arguments[1:], jsonOutput)
 	default:
@@ -203,6 +212,7 @@ Usage:
   omasend history [--json]
   omasend auto <on|off>
   omasend copy <item-id>
+  omasend clear
   omasend pair <show|copy|set|regenerate>
   omasend daemon
   omasend version

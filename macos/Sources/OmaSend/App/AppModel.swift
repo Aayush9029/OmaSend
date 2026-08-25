@@ -109,6 +109,22 @@ final class AppModel {
         writePasteboard(configuration.pairingCode)
     }
 
+    func clearHistoryEverywhere() {
+        clearLocalHistory()
+        network.broadcast(WireMessage(
+            version: OmaSendConstants.protocolVersion, type: "history_clear",
+            id: UUID().uuidString.lowercased(), originId: configuration.deviceId,
+            originName: configuration.deviceName,
+            createdAt: Int64(Date().timeIntervalSince1970 * 1_000), text: nil
+        ))
+    }
+
+    private func clearLocalHistory() {
+        history = []
+        configuration.history = []
+        persist()
+    }
+
     func setPopupVisible(_ visible: Bool) {
         isPopupVisible = visible
         guard !visible else { return }
@@ -184,8 +200,12 @@ final class AppModel {
     }
 
     private func receive(_ message: WireMessage) {
-        guard (message.type == "clipboard" || message.type == "file"),
-              message.originId != configuration.deviceId else { return }
+        guard message.originId != configuration.deviceId else { return }
+        if message.type == "history_clear" {
+            clearLocalHistory()
+            return
+        }
+        guard message.type == "clipboard" || message.type == "file" else { return }
         guard add(message) else { return }
         showTransferPulse(.incoming)
         if autoCopy { writePasteboard(message) }

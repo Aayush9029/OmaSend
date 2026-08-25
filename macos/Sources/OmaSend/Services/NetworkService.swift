@@ -145,7 +145,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             if let sealed = try? ProtocolCrypto.seal(reply, secret: secret), let framed = try? ProtocolCrypto.frame(sealed) {
                 connection.send(content: framed, completion: .contentProcessed { _ in connection.cancel() })
             } else { connection.cancel() }
-        case "clipboard":
+        case "clipboard", "history_clear":
             DispatchQueue.main.async { [weak self] in self?.onMessage?(message) }
             connection.cancel()
         case "file_offer":

@@ -134,6 +134,13 @@ func historyBytes(items []model.HistoryItem) int {
 	return total
 }
 
+func (s *Store) ClearHistory() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.History = []model.HistoryItem{}
+	return s.saveLocked()
+}
+
 func (s *Store) HistoryItem(id string) (model.HistoryItem, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

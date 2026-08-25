@@ -131,6 +131,8 @@ func (d *Daemon) handleConnection(ctx context.Context, connection net.Conn) {
 		return
 	case "clipboard":
 		d.receiveClipboard(ctx, message)
+	case "history_clear":
+		_ = d.store.ClearHistory()
 	case "file_offer":
 		d.receiveFile(ctx, connection, message)
 	}
@@ -550,6 +552,13 @@ func (d *Daemon) handleIPC(request ipc.Request) ipc.Response {
 		d.peers = map[string]model.Peer{}
 		d.mu.Unlock()
 		return ipc.Response{OK: true, PairingCode: secret}
+	case "clear":
+		if err := d.store.ClearHistory(); err != nil {
+			return ipc.Response{OK: false, Error: err.Error()}
+		}
+		d.broadcast(context.Background(), d.newMessage("history_clear", ""))
+		status := d.status()
+		return ipc.Response{OK: true, Status: &status}
 	case "copy":
 		item, ok := d.store.HistoryItem(request.ItemID)
 		if !ok {

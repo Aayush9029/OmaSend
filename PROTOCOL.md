@@ -28,6 +28,8 @@ The outer JSON envelope is:
 
 The authenticated plaintext includes a unique item ID, sender ID and name, timestamp, optional UTF-8 text, optional MIME type, and optional base64 image data.
 
+A `history_clear` message carries no content. The receiver deletes its entire clipboard history and does not rebroadcast, so a clear started on one device empties every connected device exactly once.
+
 ## Files
 
 Files use a separate direct TCP stream and are not subject to the clipboard item limit. The sender opens with an encrypted `file_offer` containing the safe file name and 64-bit size. The receiver keeps a private partial file and answers with its current byte offset.

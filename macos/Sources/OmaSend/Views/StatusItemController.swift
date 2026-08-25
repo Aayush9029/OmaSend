@@ -48,6 +48,10 @@ final class StatusItemController {
 
     @objc private func statusItemClicked() {
         guard let button = statusItem.button, let window = button.window else { return }
+        if NSApp.currentEvent?.type == .rightMouseDown {
+            model.clearHistoryEverywhere()
+            return
+        }
         if popup.isVisible || popup.wasJustDismissed { popup.dismiss(); return }
         let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
         button.highlight(true)
