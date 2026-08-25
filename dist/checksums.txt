@@ -1,2 +1,4 @@
 44f6807e5a0cf69c5d1925adf2e63652c49aec5cd8c180ee7f2926e35cab62a7  omasend_0.1.3_linux_amd64.tar.gz
 39313ed05c851e03319fc0f9fa9a177857b4c77cad7a2a4f74052d0f716306fb  omasend_0.1.3_linux_arm64.tar.gz
+9f56ee5b90da04505fdefcce8ff4a8d7cfd29c1b5951f88def8e5199e2b423c9  OmaSend_0.1.3_macOS_arm64.dmg
+659778fd0fefc7ae4c023058766ef851c155ff8d4b04a8562ecbb3a04ed24afc  OmaSend_0.1.3_macOS_arm64.zip
