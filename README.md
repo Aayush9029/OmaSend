@@ -7,8 +7,8 @@
 <p align="center">One clipboard across macOS and Omarchy.</p>
 
 <p align="center">
-  <img src="assets/screenshots/omasend-macos.png" width="330" alt="OmaSend on macOS">
-  <img src="assets/screenshots/omasend-linux.png" width="330" alt="OmaSend on Omarchy">
+  <img src="assets/screenshots/omasend-macos.jpeg" width="330" alt="OmaSend on macOS">
+  <img src="assets/screenshots/omasend-linux.jpeg" width="330" alt="OmaSend on Omarchy">
 </p>
 
 ## Install
