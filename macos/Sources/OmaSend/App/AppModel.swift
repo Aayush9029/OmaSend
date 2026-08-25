@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Observation
 import ServiceManagement
+import UniformTypeIdentifiers
 
 enum TransferDirection: Equatable {
     case outgoing
@@ -58,6 +59,7 @@ final class AppModel {
 
     func start() {
         applyActivationPolicy()
+        backfillFileThumbnails()
         lastClipboardFingerprint = readPasteboard()?.fingerprint
         network.onMessage = { [weak self] message in self?.receive(message) }
         network.onPeersChanged = { [weak self] peers in self?.peers = peers }
@@ -216,13 +218,22 @@ final class AppModel {
             else { return false }
             return NSImage(data: data) != nil
         }()
-        guard (hasText || isImage || isFile), !history.contains(where: { $0.id == message.id }) else { return false }
+        guard hasText || isImage || isFile else { return false }
+        let thumbnail = thumbnailBase64(from: message.data, filePath: message.filePath)
+        if let index = history.firstIndex(where: { $0.id == message.id }) {
+            if history[index].thumbnail?.isEmpty != false, let thumbnail {
+                history[index].thumbnail = thumbnail
+                configuration.history = history
+                persist()
+            }
+            return false
+        }
         let item = ClipboardItem(
             id: message.id, text: message.text ?? "", originId: message.originId,
             originName: message.originName, createdAt: message.createdAt,
             isLocal: message.originId == configuration.deviceId,
             contentType: message.contentType, data: message.data,
-            thumbnail: thumbnailBase64(from: message.data),
+            thumbnail: thumbnail,
             fileName: message.fileName, fileSize: message.fileSize, filePath: message.filePath
         )
         history.insert(item, at: 0)
@@ -335,8 +346,18 @@ final class AppModel {
         return NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:])
     }
 
-    private func thumbnailBase64(from encoded: String?) -> String? {
-        guard let encoded, let data = Data(base64Encoded: encoded), let image = NSImage(data: data) else { return nil }
+    private func thumbnailBase64(from encoded: String?, filePath: String?) -> String? {
+        let image: NSImage?
+        if let encoded, let data = Data(base64Encoded: encoded) {
+            image = NSImage(data: data)
+        } else if let filePath {
+            let fileExtension = URL(fileURLWithPath: filePath).pathExtension
+            guard UTType(filenameExtension: fileExtension)?.conforms(to: .image) == true else { return nil }
+            image = NSImage(contentsOfFile: filePath)
+        } else {
+            image = nil
+        }
+        guard let image else { return nil }
         let maxSide: CGFloat = 160
         let ratio = min(maxSide / max(image.size.width, 1), maxSide / max(image.size.height, 1), 1)
         let size = NSSize(width: max(1, image.size.width * ratio), height: max(1, image.size.height * ratio))
@@ -349,6 +370,20 @@ final class AppModel {
               let png = NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:])
         else { return nil }
         return png.base64EncodedString()
+    }
+
+    private func backfillFileThumbnails() {
+        var changed = false
+        for index in history.indices where history[index].thumbnail?.isEmpty != false {
+            guard let filePath = history[index].filePath,
+                  let thumbnail = thumbnailBase64(from: nil, filePath: filePath)
+            else { continue }
+            history[index].thumbnail = thumbnail
+            changed = true
+        }
+        guard changed else { return }
+        configuration.history = history
+        persist()
     }
 
     private func persist() {

@@ -7,6 +7,8 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
+	"io"
+	"os"
 	"strings"
 )
 
@@ -36,7 +38,20 @@ func ImageThumbnail(encoded string) string {
 	if err != nil {
 		return ""
 	}
-	source, _, err := image.Decode(bytes.NewReader(data))
+	return imageThumbnail(bytes.NewReader(data))
+}
+
+func ImageFileThumbnail(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	return imageThumbnail(file)
+}
+
+func imageThumbnail(reader io.Reader) string {
+	source, _, err := image.Decode(reader)
 	if err != nil {
 		return ""
 	}

@@ -576,6 +576,8 @@ func historyItem(message model.Message, localID string) model.HistoryItem {
 	}
 	if item.IsImage() {
 		item.Thumbnail = model.ImageThumbnail(item.Data)
+	} else if item.IsFile() {
+		item.Thumbnail = model.ImageFileThumbnail(item.FilePath)
 	}
 	return item
 }

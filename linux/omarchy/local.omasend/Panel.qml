@@ -200,7 +200,7 @@ Panel {
                 horizontalAlignment: Text.AlignHCenter
               }
               Text {
-                text: String(history[index].thumbnail || "") !== "" ? "Image" : (String(history[index].fileName || "") !== "" ? String(history[index].fileName) : root.preview(history[index].text))
+                text: String(history[index].fileName || "") !== "" ? String(history[index].fileName) : (String(history[index].thumbnail || "") !== "" ? "Image" : root.preview(history[index].text))
                 color: root.foreground
                 font.family: bar ? bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.body

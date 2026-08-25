@@ -72,7 +72,7 @@ struct ClipboardItem: Codable, Identifiable, Equatable {
     let isLocal: Bool
     let contentType: String?
     let data: String?
-    let thumbnail: String?
+    var thumbnail: String?
     let fileName: String?
     let fileSize: Int64?
     let filePath: String?
@@ -99,7 +99,7 @@ struct ClipboardItem: Codable, Identifiable, Equatable {
     }
 
     var date: Date { Date(timeIntervalSince1970: Double(createdAt) / 1_000) }
-    var isImage: Bool { contentType?.hasPrefix("image/") == true && data != nil }
+    var isImage: Bool { thumbnail?.isEmpty == false || (contentType?.hasPrefix("image/") == true && data != nil) }
     var isFile: Bool { fileName != nil && filePath != nil }
     var preview: String {
         if let fileName { return fileName }

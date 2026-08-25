@@ -59,6 +59,12 @@ func Open(path string) (*Store, error) {
 	if store.data.History == nil {
 		store.data.History = []model.HistoryItem{}
 	}
+	for index := range store.data.History {
+		item := &store.data.History[index]
+		if item.Thumbnail == "" && item.IsFile() {
+			item.Thumbnail = model.ImageFileThumbnail(item.FilePath)
+		}
+	}
 	if err := store.saveLocked(); err != nil {
 		return nil, err
 	}
