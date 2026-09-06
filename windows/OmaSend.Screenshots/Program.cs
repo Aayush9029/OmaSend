@@ -24,14 +24,21 @@ internal static class Program
   ];
   new SettingsStore(root).Save(settings);
   var app = new App(); app.InitializeComponent();
-  var window = new MainWindow(root);
+  var window = new MainWindow(root) { ShowActivated = false };
   window.Show();
   var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
   timer.Tick += (_, _) =>
   {
-   timer.Stop(); window.UpdateLayout();
+   timer.Stop(); window.Show(); window.UpdateLayout();
    var bitmap = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-   bitmap.Render(window);
+   var drawing = new DrawingVisual();
+   using (var context = drawing.RenderOpen())
+   {
+    var bounds = new Rect(0, 0, window.ActualWidth, window.ActualHeight);
+    context.DrawRectangle(window.Background, null, bounds);
+    context.DrawRectangle(new VisualBrush((Visual)window.Content), null, bounds);
+   }
+   bitmap.Render(drawing);
    var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
    Directory.CreateDirectory(Path.GetDirectoryName(output)!);
    using (var stream = File.Create(output)) encoder.Save(stream);

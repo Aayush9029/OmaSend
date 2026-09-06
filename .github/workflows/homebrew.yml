@@ -1,0 +1,16 @@
+name: Homebrew cask
+on:
+  workflow_dispatch:
+  push:
+    paths: ['Casks/**', '.github/workflows/homebrew.yml']
+permissions:
+  contents: read
+jobs:
+  cask:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - run: ruby -c Casks/omasend.rb
+      - run: brew tap aayush9029/omasend https://github.com/Aayush9029/OmaSend
+      - run: brew info --cask aayush9029/omasend/omasend
+      - run: brew fetch --cask aayush9029/omasend/omasend
