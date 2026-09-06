@@ -22,5 +22,5 @@ export function PlatformIcon({platform,name,className=''}){
  const path=source.match(/<path d="([^"]+)"/)[1];
  return <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={`platform-icon ${kind==='windows'?'windows-mark':''} ${className}`}><path d={path}/></svg>;
 }
-export const IconButton=forwardRef(function IconButton({label,children,className='',...props},ref){return <Tooltip.Root><Tooltip.Trigger asChild><button ref={ref} type="button" aria-label={label} className={'icon-button '+className} {...props}>{children}</button></Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="tooltip" sideOffset={7}>{label}</Tooltip.Content></Tooltip.Portal></Tooltip.Root>;});
+export const IconButton=forwardRef(function IconButton({label,shortcut,children,className='',...props},ref){return <Tooltip.Root><Tooltip.Trigger asChild><button ref={ref} type="button" aria-label={label} className={'icon-button '+className} {...props}>{children}</button></Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="tooltip" sideOffset={7}>{label}{shortcut&&<kbd className="shortcut-key">{shortcut}</kbd>}</Tooltip.Content></Tooltip.Portal></Tooltip.Root>;});
 export function StatusDot({connected,label}){return <span className={'status-dot '+(connected?'connected':'pending')} role="img" aria-label={label} title={label}/>;}
