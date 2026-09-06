@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">OmaSend</h1>
-<p align="center">One encrypted clipboard across Windows, macOS, and Linux.</p>
+<p align="center">One shared clipboard across Windows, macOS, Linux, and your browser.</p>
 
 Share text, images, and files directly between your computers. No cloud or account. Includes clipboard history, auto copy, and resumable file transfers.
 
@@ -47,12 +47,26 @@ curl -fsSL https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.sh 
 
 The installer also enables the panel on compatible **Omarchy Shell** systems. Other Wayland desktops use the native daemon and CLI: `omasend status`. [Linux install details](docs/INSTALL.md#linux).
 
+## Web companion
+
+Open OmaSend in a browser on your local network. Send text, attach files, copy shared text, and download incoming files. Runs on Windows, macOS and Linux as one executable, with no extra runtime.
+
+**Preview:** build and run from this repository with Go installed:
+
+```sh
+cd linux && go run ./cmd/omasend-web
+```
+
+Open **http://localhost:53318**. Add `--listen 0.0.0.0:53318` to make it available to other browsers on your LAN. [Setup, packaged builds and browser limits](docs/WEB.md).
+
 ## Pair your devices
 
 Use the same pairing code on every computer: **Settings > Pairing code** on Windows, **OmaSend Settings > Devices** on macOS, or `omasend pair set <code>` on Linux. Enable **Auto copy** to put received items directly on the clipboard.
 
+Prefer no key? Updated clients have an optional **Trusted LAN** switch in Windows Settings, macOS Devices, the Linux panel (`omasend lan on`), and the web companion. Enable it on each device to share without copying keys. It is unencrypted and disabled by default; existing published v0.1.3 apps need an update to use it.
+
 ## Security
 
-Clipboard data travels directly between paired devices over your local network or Tailscale, encrypted with AES-256-GCM using your shared pairing code; keep that code private.
+By default, clipboard data and files travel directly between paired devices using AES-256-GCM. Optional Trusted LAN skips keys and encryption: anyone on that network can read or send items. The browser-to-companion LAN HTTP connection is also unencrypted.
 
 [Protocol](PROTOCOL.md) · [Build and screenshots](docs/DEVELOPMENT.md) · [Test results](docs/VALIDATION.md) · [MIT license](LICENSE)

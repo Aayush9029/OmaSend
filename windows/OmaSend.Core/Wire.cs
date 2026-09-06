@@ -43,18 +43,27 @@ public static class Wire
         if (secret.Length < 20 || secret.Length > 1024) throw new InvalidDataException("Pairing code must contain 20 to 1024 characters.");
         return new AesGcm(SHA256.HashData(Encoding.UTF8.GetBytes(secret)), 16);
     }
-    public static byte[] Seal(string secret, Message message)
+    public static byte[] Seal(string secret, Message message, bool trustedLAN = false)
     {
+        if (trustedLAN) return JsonSerializer.SerializeToUtf8Bytes(new LanEnvelope(1, "lan", message), Json);
         using var aes = Cipher(secret);
         byte[] plain = JsonSerializer.SerializeToUtf8Bytes(message, Json), nonce = RandomNumberGenerator.GetBytes(12);
         byte[] cipher = new byte[plain.Length + 16];
         aes.Encrypt(nonce, plain, cipher.AsSpan(0, plain.Length), cipher.AsSpan(plain.Length), "omasend-v1"u8);
         return JsonSerializer.SerializeToUtf8Bytes(new Envelope(1, Convert.ToBase64String(nonce), Convert.ToBase64String(cipher)), Json);
     }
-    public static Message Open(string secret, byte[] frame)
+    private sealed record LanEnvelope(int Version, string Mode, Message Message);
+    public static Message Open(string secret, byte[] frame, bool trustedLAN = false)
     {
         if (frame.Length > MaxFrame) throw new InvalidDataException("Frame too large.");
+        if (trustedLAN)
+        {
+            var lan = JsonSerializer.Deserialize<LanEnvelope>(frame, Json);
+            if (lan is not { Version: 1, Mode: "lan", Message: not null }) throw new InvalidDataException("Not a Trusted LAN message.");
+            return Validate(lan.Message);
+        }
         var env = JsonSerializer.Deserialize<Envelope>(frame, Json) ?? throw new InvalidDataException();
+        if (env.Nonce is null || env.Ciphertext is null) throw new InvalidDataException("Encrypted message required.");
         if (env.Version != 1) throw new InvalidDataException("Unsupported protocol version.");
         var nonce = Convert.FromBase64String(env.Nonce);
         var cipher = Convert.FromBase64String(env.Ciphertext);
@@ -63,6 +72,10 @@ public static class Wire
         var plain = new byte[cipher.Length - 16];
         aes.Decrypt(nonce, cipher.AsSpan(0, plain.Length), cipher.AsSpan(plain.Length), plain, "omasend-v1"u8);
         var message = JsonSerializer.Deserialize<Message>(plain, Json) ?? throw new InvalidDataException();
+        return Validate(message);
+    }
+    private static Message Validate(Message message)
+    {
         if (message.Version != 1 || string.IsNullOrWhiteSpace(message.Id) || message.Id.Length > 256 ||
             string.IsNullOrWhiteSpace(message.OriginId) || message.OriginId.Length > 256 || message.OriginName is null || message.OriginName.Length > 256 ||
             Encoding.UTF8.GetByteCount(message.Text ?? "") > MaxClipboard ||
@@ -100,9 +113,14 @@ public static class Wire
         BinaryPrimitives.WriteInt64BigEndian(aad.AsSpan(prefix.Length), offset);
         return aad;
     }
-    public static byte[] SealChunk(string secret, string id, long offset, byte[] plain, byte[]? nonce = null)
+    public static byte[] SealChunk(string secret, string id, long offset, byte[] plain, byte[]? nonce = null, bool trustedLAN = false)
     {
         if (offset < 0 || plain.Length is <= 0 or > ChunkSize) throw new InvalidDataException();
+        if (trustedLAN)
+        {
+            byte[] lan = new byte[12 + plain.Length]; "OSL1"u8.CopyTo(lan);
+            BinaryPrimitives.WriteInt64BigEndian(lan.AsSpan(4), offset); plain.CopyTo(lan, 12); return lan;
+        }
         using var aes = Cipher(secret);
         byte[] payload = new byte[36 + plain.Length];
         BinaryPrimitives.WriteInt64BigEndian(payload, offset);
@@ -110,8 +128,13 @@ public static class Wire
         aes.Encrypt(payload.AsSpan(8, 12), plain, payload.AsSpan(20, plain.Length), payload.AsSpan(20 + plain.Length), FileAad(id, offset));
         return payload;
     }
-    public static byte[] OpenChunk(string secret, string id, long offset, byte[] payload)
+    public static byte[] OpenChunk(string secret, string id, long offset, byte[] payload, bool trustedLAN = false)
     {
+        if (trustedLAN)
+        {
+            if (offset < 0 || payload.Length is <= 12 or > ChunkSize + 12 || !payload.AsSpan(0, 4).SequenceEqual("OSL1"u8) || BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(4)) != offset) throw new InvalidDataException("Invalid LAN file chunk.");
+            return payload[12..];
+        }
         if (offset < 0 || payload.Length is <= 36 or > ChunkSize + 36 || BinaryPrimitives.ReadInt64BigEndian(payload) != offset) throw new InvalidDataException("Invalid file chunk.");
         using var aes = Cipher(secret);
         byte[] plain = new byte[payload.Length - 36];

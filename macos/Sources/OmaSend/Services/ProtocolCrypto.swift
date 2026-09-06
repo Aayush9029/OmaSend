@@ -19,10 +19,12 @@ enum ProtocolCryptoError: Error, LocalizedError {
 }
 
 enum ProtocolCrypto {
+    private struct LANEnvelope: Codable { var version: Int; var mode: String; var message: WireMessage }
     private static let additionalData = Data("omasend-v1".utf8)
     private static let fileAdditionalData = Data("omasend-file-v1".utf8)
 
-    static func seal(_ message: WireMessage, secret: String, nonceData: Data? = nil) throws -> Data {
+    static func seal(_ message: WireMessage, secret: String, nonceData: Data? = nil, trustedLAN: Bool = false) throws -> Data {
+        if trustedLAN { return try JSONEncoder().encode(LANEnvelope(version: 1, mode: "lan", message: message)) }
         guard secret.count >= 20 else { throw ProtocolCryptoError.pairingCodeTooShort }
         let key = SymmetricKey(data: SHA256.hash(data: Data(secret.utf8)))
         let plain = try JSONEncoder().encode(message)
@@ -40,7 +42,13 @@ enum ProtocolCrypto {
         ))
     }
 
-    static func open(_ data: Data, secret: String) throws -> WireMessage {
+    static func open(_ data: Data, secret: String, trustedLAN: Bool = false) throws -> WireMessage {
+        guard data.count <= OmaSendConstants.maxFrameBytes else { throw ProtocolCryptoError.invalidMessage }
+        if trustedLAN {
+            let envelope = try JSONDecoder().decode(LANEnvelope.self, from: data)
+            guard envelope.version == 1, envelope.mode == "lan" else { throw ProtocolCryptoError.malformedEnvelope }
+            return try validate(envelope.message)
+        }
         guard secret.count >= 20 else { throw ProtocolCryptoError.pairingCodeTooShort }
         guard let envelope = try? JSONDecoder().decode(WireEnvelope.self, from: data),
               envelope.version == OmaSendConstants.protocolVersion,
@@ -60,8 +68,12 @@ enum ProtocolCrypto {
         let plain: Data
         do { plain = try AES.GCM.open(box, using: key, authenticating: additionalData) }
         catch { throw ProtocolCryptoError.authenticationFailed }
-        guard var message = try? JSONDecoder().decode(WireMessage.self, from: plain),
-              message.version == OmaSendConstants.protocolVersion,
+        return try validate(JSONDecoder().decode(WireMessage.self, from: plain))
+    }
+
+    private static func validate(_ input: WireMessage) throws -> WireMessage {
+        var message = input
+        guard message.version == OmaSendConstants.protocolVersion,
               !message.id.isEmpty,
               !message.originId.isEmpty,
               (message.text?.utf8.count ?? 0) <= OmaSendConstants.maxClipboardBytes,
@@ -112,14 +124,15 @@ enum ProtocolCrypto {
 
     static func sealFileChunk(
         _ plaintext: Data, transferId: String, offset: Int64,
-        secret: String, nonceData: Data? = nil
+        secret: String, nonceData: Data? = nil, trustedLAN: Bool = false
     ) throws -> Data {
-        guard secret.count >= 20, offset >= 0, !plaintext.isEmpty,
+        guard (trustedLAN || secret.count >= 20), offset >= 0, !plaintext.isEmpty,
               plaintext.count <= OmaSendConstants.fileChunkBytes
         else { throw ProtocolCryptoError.invalidMessage }
         let key = SymmetricKey(data: SHA256.hash(data: Data(secret.utf8)))
         var bigOffset = UInt64(offset).bigEndian
         let offsetData = Data(bytes: &bigOffset, count: MemoryLayout<UInt64>.size)
+        if trustedLAN { return Data("OSL1".utf8) + offsetData + plaintext }
         let aad = fileAdditionalData + Data(transferId.utf8) + offsetData
         let sealed: AES.GCM.SealedBox
         if let nonceData {
@@ -133,15 +146,22 @@ enum ProtocolCrypto {
     }
 
     static func openFileChunk(
-        _ payload: Data, transferId: String, expectedOffset: Int64, secret: String
+        _ payload: Data, transferId: String, expectedOffset: Int64, secret: String, trustedLAN: Bool = false
     ) throws -> Data {
+        if trustedLAN {
+            guard expectedOffset >= 0, payload.count > 12, payload.count <= OmaSendConstants.fileChunkBytes + 12,
+                  payload.prefix(4) == Data("OSL1".utf8) else { throw ProtocolCryptoError.invalidMessage }
+            let offset = payload.subdata(in: 4..<12).withUnsafeBytes { UInt64(bigEndian: $0.loadUnaligned(as: UInt64.self)) }
+            guard offset == UInt64(expectedOffset) else { throw ProtocolCryptoError.invalidMessage }
+            return Data(payload.dropFirst(12))
+        }
         guard secret.count >= 20,
               payload.count > MemoryLayout<UInt64>.size + 12 + 16,
               payload.count <= OmaSendConstants.fileChunkBytes + 36,
               expectedOffset >= 0
         else { throw ProtocolCryptoError.invalidMessage }
         let offset = payload.prefix(8).withUnsafeBytes {
-            Int64(UInt64(bigEndian: $0.loadUnaligned(as: UInt64.self)))
+            Int64(bitPattern: UInt64(bigEndian: $0.loadUnaligned(as: UInt64.self)))
         }
         guard offset == expectedOffset else { throw ProtocolCryptoError.invalidMessage }
         let nonce = payload.subdata(in: 8..<20)

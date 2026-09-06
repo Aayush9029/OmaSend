@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Share text and files with your nearby OmaSend devices."><title>OmaSend · Web</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<header class="topbar"><a href="/" class="brand" aria-label="OmaSend home"><span class="mark" aria-hidden="true">↗</span>OmaSend <span class="web-label">Web</span></a><span id="connection" role="status">Connecting…</span></header>
+<div class="workspace">
+<aside>
+ <div class="section-heading"><h2>Devices</h2><span id="peer-count" class="count">0</span></div>
+ <div class="this-device"><span class="device-icon" aria-hidden="true">▣</span><div><strong id="device-name">This companion</strong><span>Browser companion</span></div></div>
+ <div id="devices"><p class="muted">Looking for devices…</p></div>
+ <details class="connect-panel"><summary>Connect a device <span aria-hidden="true">＋</span></summary><form id="connect-form"><label for="host">Device IP address</label><input id="host" placeholder="192.168.1.20" required autocomplete="off"><label for="port">Port</label><input id="port" type="number" value="53317" min="1" max="65535" required><button type="submit">Connect</button><p class="hint">Use the same sharing mode on both devices.</p></form></details>
+ <div class="sharing"><span class="eyebrow">SHARING MODE</span><strong id="mode">Encrypted</strong><p id="mode-note">Use your native app’s pairing key to connect.</p><details id="settings"><summary>Change sharing mode</summary><form id="mode-form"><label class="switch-row" for="trusted-lan"><span>Trusted LAN</span><input id="trusted-lan" type="checkbox" role="switch"></label><p class="hint">No key. Unencrypted. Anyone on this local network can read or send items.</p><button type="submit">Save mode</button></form><form id="pair-form"><label for="pair-code">Pairing key from another device</label><input id="pair-code" type="password" minlength="20" maxlength="1024" autocomplete="off" required><button type="submit">Use key</button></form></details><p id="host-only" class="hint" hidden>Change this on the host’s localhost page.</p></div>
+</aside>
+<main>
+ <div class="page-heading"><div><span class="eyebrow">YOUR SHARED SPACE</span><h1>Send something.</h1></div><span class="local-badge">Local network</span></div>
+ <form id="send-form" class="composer"><label for="message" class="sr-only">Text to share</label><textarea id="message" placeholder="Paste or type here…" maxlength="10485760"></textarea><div class="composer-footer"><div class="tools"><button type="button" id="paste" class="quiet">Paste</button><button type="button" id="attach" class="quiet">Attach file</button><input id="file" type="file" hidden></div><button type="submit" id="send" class="primary">Send <span aria-hidden="true">↗</span></button></div><div id="drop-hint" hidden>Drop a file to share</div></form>
+ <p id="browser-note" class="hint">Text and files stay on your network.</p>
+ <div class="history-heading"><h2>Shared history</h2><span id="history-count" class="muted"></span></div>
+ <div id="history" aria-label="Shared history"><div class="empty"><span class="empty-mark" aria-hidden="true">↙</span><h3>Nothing shared yet</h3><p>Send something here, or copy it on a connected device.</p></div></div>
+</main>
+</div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+</body></html>

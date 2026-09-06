@@ -70,6 +70,7 @@ type Peer struct {
 }
 
 type Status struct {
+	TrustedLAN  bool   `json:"trustedLAN"`
 	DeviceID    string `json:"deviceId"`
 	DeviceName  string `json:"deviceName"`
 	AutoCopy    bool   `json:"autoCopy"`

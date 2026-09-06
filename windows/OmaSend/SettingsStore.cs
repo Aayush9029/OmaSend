@@ -10,6 +10,7 @@ public sealed class Settings
     public string DeviceId { get; set; } = Guid.NewGuid().ToString();
     public string DeviceName { get; set; } = Environment.MachineName;
     public string PairingCode { get; set; } = Wire.NewSecret();
+    public bool TrustedLAN { get; set; }
     public bool AutoCopy { get; set; }
     public string[] Hosts { get; set; } = [];
     public Message[] History { get; set; } = [];

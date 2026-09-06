@@ -27,9 +27,10 @@ import (
 )
 
 type Daemon struct {
-	store *config.Store
-	clip  *clipboard.Wayland
-	port  int
+	browser bool
+	store   *config.Store
+	clip    *clipboard.Wayland
+	port    int
 
 	mu         sync.RWMutex
 	peers      map[string]model.Peer
@@ -55,8 +56,12 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 
 	go func() { <-ctx.Done(); listener.Close() }()
 	go d.accept(ctx, listener)
-	go d.clip.Watch(ctx, d.localClipboardChanged)
-	go func() { _ = ipc.Serve(socketPath, d.handleIPC, stop) }()
+	if !d.browser {
+		go d.clip.Watch(ctx, d.localClipboardChanged)
+	}
+	if !d.browser {
+		go func() { _ = ipc.Serve(socketPath, d.handleIPC, stop) }()
+	}
 
 	snapshot := d.store.Snapshot()
 	shutdownBonjour, bonjourErr := discovery.Start(ctx, snapshot.DeviceID, snapshot.DeviceName, d.port, func(found discovery.Found) {
@@ -118,12 +123,15 @@ func (d *Daemon) accept(ctx context.Context, listener net.Listener) {
 
 func (d *Daemon) handleConnection(ctx context.Context, connection net.Conn) {
 	defer connection.Close()
+	if !d.allowed(connection) {
+		return
+	}
 	_ = connection.SetDeadline(time.Now().Add(5 * time.Second))
 	frame, err := protocol.ReadFrame(connection)
 	if err != nil {
 		return
 	}
-	message, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	message, err := d.open(frame)
 	if err != nil {
 		return
 	}
@@ -143,7 +151,7 @@ func (d *Daemon) handleConnection(ctx context.Context, connection net.Conn) {
 	switch message.Type {
 	case "hello":
 		reply := d.newMessage("hello_ack", "")
-		if sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, reply); err == nil {
+		if sealed, err := d.seal(reply); err == nil {
 			_ = protocol.WriteFrame(connection, sealed)
 		}
 	case "hello_ack":
@@ -230,11 +238,14 @@ func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Me
 		return err
 	}
 	defer connection.Close()
+	if !d.allowed(connection) {
+		return errors.New("Trusted LAN requires a local network address")
+	}
 	_ = connection.SetDeadline(time.Now().Add(30 * time.Minute))
 	offer := message
 	offer.Type = "file_offer"
 	offer.FilePath = ""
-	sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, offer)
+	sealed, err := d.seal(offer)
 	if err != nil {
 		return err
 	}
@@ -245,7 +256,7 @@ func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Me
 	if err != nil {
 		return err
 	}
-	reply, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	reply, err := d.open(frame)
 	if err != nil || reply.Type != "file_resume" || reply.ID != message.ID || reply.ResumeOffset < 0 || reply.ResumeOffset > message.FileSize {
 		return errors.New("invalid file resume response")
 	}
@@ -266,7 +277,7 @@ func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Me
 			return readErr
 		}
 		payload, sealErr := protocol.SealFileChunk(
-			d.store.Snapshot().PairingCode, message.ID, offset, buffer[:count],
+			d.store.Snapshot().PairingCode, message.ID, offset, buffer[:count], d.store.Snapshot().TrustedLAN,
 		)
 		if sealErr != nil {
 			return sealErr
@@ -279,7 +290,7 @@ func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Me
 	complete := d.newMessage("file_complete", "")
 	complete.ID = message.ID
 	complete.FileSHA256 = message.FileSHA256
-	sealed, err = protocol.Seal(d.store.Snapshot().PairingCode, complete)
+	sealed, err = d.seal(complete)
 	if err != nil {
 		return err
 	}
@@ -290,7 +301,7 @@ func (d *Daemon) sendFile(ctx context.Context, peer model.Peer, message model.Me
 	if err != nil {
 		return err
 	}
-	done, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	done, err := d.open(frame)
 	if err != nil || done.Type != "file_done" || done.ID != message.ID {
 		return errors.New("file transfer was not acknowledged")
 	}
@@ -302,7 +313,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 		return
 	}
 	name := filepath.Base(strings.ReplaceAll(offer.FileName, "\\", "/"))
-	if name == "." || name == "" {
+	if !model.SafeFileName(name) {
 		return
 	}
 	root := receivedFilesDirectory()
@@ -334,7 +345,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	resume := d.newMessage("file_resume", "")
 	resume.ID = offer.ID
 	resume.ResumeOffset = offset
-	sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, resume)
+	sealed, err := d.seal(resume)
 	if err != nil || protocol.WriteFrame(connection, sealed) != nil {
 		return
 	}
@@ -343,7 +354,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 		if readErr != nil {
 			return
 		}
-		chunk, openErr := protocol.OpenFileChunk(d.store.Snapshot().PairingCode, offer.ID, offset, frame)
+		chunk, openErr := protocol.OpenFileChunk(d.store.Snapshot().PairingCode, offer.ID, offset, frame, d.store.Snapshot().TrustedLAN)
 		if openErr != nil || int64(len(chunk)) > offer.FileSize-offset {
 			return
 		}
@@ -359,7 +370,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	if err != nil {
 		return
 	}
-	complete, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	complete, err := d.open(frame)
 	if err != nil || complete.Type != "file_complete" || complete.ID != offer.ID || complete.FileSHA256 == "" {
 		return
 	}
@@ -377,14 +388,14 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	message.FileSHA256 = actualHash
 	item := historyItem(message, d.store.Snapshot().DeviceID)
 	added, err := d.store.AddHistory(item)
-	if err == nil && added && d.store.Snapshot().AutoCopy {
+	if err == nil && added && !d.browser && d.store.Snapshot().AutoCopy {
 		writeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		_ = d.clip.Write(writeCtx, clipboard.Content{ContentType: message.ContentType, FilePath: finalPath})
 		cancel()
 	}
 	done := d.newMessage("file_done", "")
 	done.ID = offer.ID
-	if sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, done); err == nil {
+	if sealed, err := d.seal(done); err == nil {
 		_ = protocol.WriteFrame(connection, sealed)
 	}
 }
@@ -437,7 +448,7 @@ func (d *Daemon) receiveClipboard(ctx context.Context, message model.Message) {
 	if err != nil || !added {
 		return
 	}
-	if d.store.Snapshot().AutoCopy {
+	if !d.browser && d.store.Snapshot().AutoCopy {
 		writeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
 		_ = d.clip.Write(writeCtx, clipboardContent(message))
@@ -459,7 +470,7 @@ func (d *Daemon) send(ctx context.Context, host string, port int, message model.
 	if host == "" || port <= 0 {
 		return errors.New("invalid peer")
 	}
-	sealed, err := protocol.Seal(d.store.Snapshot().PairingCode, message)
+	sealed, err := d.seal(message)
 	if err != nil {
 		return err
 	}
@@ -469,6 +480,9 @@ func (d *Daemon) send(ctx context.Context, host string, port int, message model.
 		return err
 	}
 	defer connection.Close()
+	if !d.allowed(connection) {
+		return errors.New("Trusted LAN requires a local network address")
+	}
 	_ = connection.SetDeadline(time.Now().Add(4 * time.Second))
 	if err := protocol.WriteFrame(connection, sealed); err != nil {
 		return err
@@ -480,7 +494,7 @@ func (d *Daemon) send(ctx context.Context, host string, port int, message model.
 	if err != nil {
 		return err
 	}
-	reply, err := protocol.Open(d.store.Snapshot().PairingCode, frame)
+	reply, err := d.open(frame)
 	if err != nil || reply.Type != "hello_ack" {
 		return errors.New("invalid hello response")
 	}
@@ -489,6 +503,9 @@ func (d *Daemon) send(ctx context.Context, host string, port int, message model.
 }
 
 func (d *Daemon) probeTailscale(ctx context.Context) {
+	if d.store.Snapshot().TrustedLAN {
+		return
+	}
 	for _, host := range discovery.TailscaleHosts(ctx) {
 		go d.sendHello(ctx, host, d.port, "Tailscale")
 	}
@@ -532,7 +549,7 @@ func (d *Daemon) status() model.Status {
 	snapshot := d.store.Snapshot()
 	peers := d.activePeers(20 * time.Second)
 	sort.Slice(peers, func(i, j int) bool { return peers[i].Name < peers[j].Name })
-	return model.Status{DeviceID: snapshot.DeviceID, DeviceName: snapshot.DeviceName, AutoCopy: snapshot.AutoCopy, HistorySize: len(snapshot.History), Peers: peers, Port: d.port}
+	return model.Status{TrustedLAN: snapshot.TrustedLAN, DeviceID: snapshot.DeviceID, DeviceName: snapshot.DeviceName, AutoCopy: snapshot.AutoCopy, HistorySize: len(snapshot.History), Peers: peers, Port: d.port}
 }
 
 func (d *Daemon) handleIPC(request ipc.Request) ipc.Response {
@@ -542,6 +559,18 @@ func (d *Daemon) handleIPC(request ipc.Request) ipc.Response {
 		return ipc.Response{OK: true, Status: &status}
 	case "history":
 		return ipc.Response{OK: true, History: d.store.Snapshot().History}
+	case "lan":
+		if request.Value == nil {
+			return ipc.Response{Error: "lan requires a value"}
+		}
+		if err := d.store.SetTrustedLAN(*request.Value); err != nil {
+			return ipc.Response{Error: err.Error()}
+		}
+		d.mu.Lock()
+		d.peers = map[string]model.Peer{}
+		d.mu.Unlock()
+		status := d.status()
+		return ipc.Response{OK: true, Status: &status}
 	case "auto":
 		if request.Value == nil {
 			return ipc.Response{OK: false, Error: "auto requires a value"}
@@ -622,4 +651,20 @@ func historyItem(message model.Message, localID string) model.HistoryItem {
 func clipboardContent(message model.Message) clipboard.Content {
 	data, _ := base64.StdEncoding.DecodeString(message.Data)
 	return clipboard.Content{ContentType: message.ContentType, Text: message.Text, Data: data, FilePath: message.FilePath}
+}
+
+func (d *Daemon) seal(message model.Message) ([]byte, error) {
+	s := d.store.Snapshot()
+	return protocol.Seal(s.PairingCode, message, s.TrustedLAN)
+}
+func (d *Daemon) open(frame []byte) (model.Message, error) {
+	s := d.store.Snapshot()
+	return protocol.Open(s.PairingCode, frame, s.TrustedLAN)
+}
+func IsLAN(ip net.IP) bool {
+	return ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
+}
+func (d *Daemon) allowed(c net.Conn) bool {
+	host, _, err := net.SplitHostPort(c.RemoteAddr().String())
+	return !d.store.Snapshot().TrustedLAN || err == nil && IsLAN(net.ParseIP(strings.Split(host, "%")[0]))
 }

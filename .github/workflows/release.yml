@@ -73,8 +73,25 @@ jobs:
         with:
           name: macos
           path: dist/*.zip
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: linux/go.mod
+          cache: false
+      - run: cd linux && go test ./... && go vet ./...
+      - name: Package web companion for all platforms
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}" bash scripts/package-web.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: web
+          path: dist/OmaSendWeb_*
   draft:
-    needs: [windows, linux, macos]
+    needs: [windows, linux, macos, web]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -15,6 +15,7 @@ import (
 )
 
 type Data struct {
+	TrustedLAN  bool                `json:"trustedLAN"`
 	DeviceID    string              `json:"deviceId"`
 	DeviceName  string              `json:"deviceName"`
 	PairingCode string              `json:"pairingCode"`
@@ -90,6 +91,18 @@ func (s *Store) Snapshot() Data {
 	return copy
 }
 
+func (s *Store) SetTrustedLAN(value bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old := s.data.TrustedLAN
+	s.data.TrustedLAN = value
+	if err := s.saveLocked(); err != nil {
+		s.data.TrustedLAN = old
+		return err
+	}
+	return nil
+}
+
 func (s *Store) SetAutoCopy(value bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -99,8 +112,8 @@ func (s *Store) SetAutoCopy(value bool) error {
 
 func (s *Store) SetPairingCode(value string) error {
 	value = strings.TrimSpace(value)
-	if len(value) < 20 {
-		return errors.New("pairing code must contain at least 20 characters")
+	if len(value) < 20 || len(value) > 1024 {
+		return errors.New("pairing code must contain 20 to 1024 characters")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

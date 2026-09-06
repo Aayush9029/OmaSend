@@ -83,19 +83,22 @@ func run(arguments []string) error {
 			fmt.Printf("%s  %-16s %s\n", item.ID, item.OriginName, preview)
 		}
 		return nil
-	case "auto":
+	case "auto", "lan":
 		if len(arguments) != 2 || (arguments[1] != "on" && arguments[1] != "off") {
 			return errors.New("usage: omasend auto <on|off>")
 		}
 		value := arguments[1] == "on"
-		response, err := ipc.Call(socket, ipc.Request{Action: "auto", Value: &value})
+		response, err := ipc.Call(socket, ipc.Request{Action: arguments[0], Value: &value})
 		if err != nil {
 			return unavailable(err)
 		}
 		if jsonOutput {
 			return printJSON(response.Status)
 		}
-		fmt.Println("Auto copy", onOff(value))
+		fmt.Println(arguments[0], onOff(value))
+		if arguments[0] == "lan" && value {
+			fmt.Println("Unencrypted. Anyone on this local network can read or send items.")
+		}
 		return nil
 	case "copy":
 		if len(arguments) != 2 {
@@ -207,6 +210,7 @@ func printHelp() {
 Usage:
   omasend status [--json]
   omasend history [--json]
+  omasend lan <on|off>   # key-free, unencrypted local sharing
   omasend auto <on|off>
   omasend copy <item-id>
   omasend clear

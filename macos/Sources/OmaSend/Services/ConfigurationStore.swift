@@ -5,6 +5,7 @@ struct AppConfiguration: Codable {
     var deviceName: String
     var pairingCode: String
     var autoCopy: Bool
+    var trustedLAN: Bool? = nil
     var history: [ClipboardItem]
 
     static func fresh() -> AppConfiguration {

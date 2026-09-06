@@ -40,6 +40,10 @@ Panel {
     actionProc.running = true
     root.close()
   }
+  function setLAN(value) {
+    if (actionProc.running) return
+    actionProc.command = commandFor(["lan", value ? "on" : "off", "--json"]); actionProc.running = true
+  }
   function copyPairingCode() {
     if (actionProc.running) return
     actionProc.command = commandFor(["pair", "copy"])
@@ -165,6 +169,12 @@ Panel {
           }
         }
 
+        RowLayout {
+          width: parent.width
+          Text { text: "Trusted LAN · unencrypted"; color: root.foreground; font.pixelSize: Style.font.body; Layout.fillWidth: true }
+          Switch { checked: status.trustedLAN === true; onToggled: root.setLAN(checked) }
+        }
+        Text { visible: status.trustedLAN === true; text: "Anyone on this network can read or send items."; color: root.muted; font.pixelSize: Style.font.caption; width: parent.width; wrapMode: Text.Wrap }
         Text { text: "SHARED CLIPBOARD"; color: root.muted; font.family: bar ? bar.fontFamily : Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
 
         ListView {
@@ -226,7 +236,7 @@ Panel {
         RowLayout {
           width: parent.width
           Text { text: peerCount > 0 ? (status.peers || []).map(function(peer) { return peer.name }).join(", ") : "No paired devices online"; color: root.muted; font.family: bar ? bar.fontFamily : Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; Layout.fillWidth: true }
-          Button { text: "Copy pairing code"; onClicked: root.copyPairingCode() }
+          Button { visible: !status.trustedLAN; text: "Copy pairing code"; onClicked: root.copyPairingCode() }
         }
       }
     }

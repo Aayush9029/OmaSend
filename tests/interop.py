@@ -23,13 +23,18 @@ SECRET = "omasend-test-secret-0123456789-abcdef"
 AES = AESGCM(hashlib.sha256(SECRET.encode()).digest())
 PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 CHUNK = 1024 * 1024
+LAN = False
 
 def seal(message):
+    if LAN: return json.dumps(dict(version=1, mode="lan", message=message)).encode()
     nonce = os.urandom(12)
     return json.dumps(dict(version=1, nonce=base64.b64encode(nonce).decode(), ciphertext=base64.b64encode(AES.encrypt(nonce, json.dumps(message).encode(), b"omasend-v1")).decode())).encode()
 
 def open_message(payload):
     e = json.loads(payload)
+    if LAN:
+        assert e["version"] == 1 and e["mode"] == "lan"
+        return e["message"]
     return json.loads(AES.decrypt(base64.b64decode(e["nonce"]), base64.b64decode(e["ciphertext"]), b"omasend-v1"))
 
 def exact(sock, count):
@@ -56,6 +61,7 @@ def write_frame(sock, payload, fragmented=False):
 
 def chunk(transfer, offset, data):
     off = struct.pack(">Q", offset)
+    if LAN: return b"OSL1" + off + data
     nonce = os.urandom(12)
     return off + nonce + AES.encrypt(nonce, data, b"omasend-file-v1" + transfer.encode() + off)
 
@@ -102,8 +108,12 @@ class Peer:
                         while len(data) < m["fileSize"]:
                             payload = read_frame(conn)
                             off = struct.pack(">Q", len(data))
-                            assert payload[:8] == off
-                            data.extend(AES.decrypt(payload[8:20], payload[20:], b"omasend-file-v1" + m["id"].encode() + off))
+                            if LAN:
+                                assert payload[:12] == b"OSL1" + off
+                                data.extend(payload[12:])
+                            else:
+                                assert payload[:8] == off
+                                data.extend(AES.decrypt(payload[8:20], payload[20:], b"omasend-file-v1" + m["id"].encode() + off))
                         complete = open_message(read_frame(conn))
                         assert complete["fileSHA256"] == hashlib.sha256(data).hexdigest()
                         self.files[m["fileName"]] = bytes(data)
@@ -143,9 +153,11 @@ def send_file(peer, port, data, name="resume.bin", interrupt=True):
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--bridge", required=True); parser.add_argument("--dotnet", default="dotnet")
-    args = parser.parse_args()
+    global LAN
+    parser.add_argument("--lan", action="store_true")
+    args = parser.parse_args(); LAN = args.lan
     with tempfile.TemporaryDirectory(prefix="omasend-interop-") as root:
-        process = subprocess.Popen([args.dotnet, args.bridge, "--bridge", root], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
+        process = subprocess.Popen([args.dotnet, args.bridge, "--bridge", root] + (["--lan"] if LAN else []), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
         def command(action, **fields):
             process.stdin.write(json.dumps(dict(action=action, **fields)) + "\n"); process.stdin.flush()
             reply = json.loads(process.stdout.readline()); assert "error" not in reply, reply; return reply
@@ -155,7 +167,7 @@ def main():
             assert a.send(port, a.message("hello"), True, True)["type"] == "hello_ack"
             assert b.send(port, b.message("hello"), True)["type"] == "hello_ack"
             eventually(lambda: len(command("status")["peers"]) == 2)
-            print("PASS two independent Python peers authenticated concurrently")
+            print("PASS two independent Python peers connected concurrently in " + ("Trusted LAN" if LAN else "encrypted") + " mode")
             message = a.message("clipboard", text="Python → Windows 👋", contentType="text/plain")
             a.send(port, message, fragmented=True)
             b.send(port, b.message("clipboard", data=PNG, contentType="image/png"))
@@ -169,7 +181,7 @@ def main():
             data = os.urandom(2 * CHUNK + 37)
             send_file(a, port, data)
             assert Path(root, "resume.bin").read_bytes() == data
-            print("PASS Python → C# encrypted file resumes after disconnect with SHA-256 verification")
+            print("PASS Python → C# file resumes after disconnect with SHA-256 verification")
             source = Path(root, "outgoing.bin"); source.write_bytes(data)
             command("file", path=str(source))
             assert a.files["outgoing.bin"] == data and b.files["outgoing.bin"] == data
@@ -179,10 +191,11 @@ def main():
                 with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
                     write_frame(s, payload)
             bad = bytearray(seal(a.message("clipboard", text="tampered"))); bad[-10] ^= 1
+            if LAN: bad = json.dumps(dict(version=999, mode="lan", message=a.message("clipboard", text="tampered"))).encode()
             with socket.create_connection(("127.0.0.1", port), timeout=5) as s: write_frame(s, bad)
             assert a.send(port, a.message("hello"), True)["type"] == "hello_ack"
             assert not any(m.get("text") == "tampered" for m in command("status")["messages"])
-            print("PASS malformed and tampered messages rejected; listener remains healthy")
+            print("PASS malformed messages rejected; listener remains healthy")
             command("clear")
             eventually(lambda: a.messages[-1]["type"] == b.messages[-1]["type"] == "history_clear")
             assert not a.failures and not b.failures, (a.failures, b.failures)

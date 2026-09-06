@@ -26,6 +26,7 @@ struct TransferPulse: Equatable, Identifiable {
 final class AppModel {
     private(set) var deviceName: String
     private(set) var autoCopy: Bool
+    private(set) var trustedLAN: Bool
     private(set) var history: [ClipboardItem]
     private(set) var peers: [PeerDevice] = []
     private(set) var lastError: String?
@@ -52,6 +53,7 @@ final class AppModel {
         self.configuration = configuration
         self.deviceName = configuration.deviceName
         self.autoCopy = configuration.autoCopy
+        self.trustedLAN = configuration.trustedLAN ?? false
         self.history = configuration.history
         self.showsDockIcon = UserDefaults.standard.bool(forKey: "showsDockIcon")
         self.menuBarStyle = MenuBarStyle(rawValue: UserDefaults.standard.string(forKey: "menuBarStyle") ?? "") ?? .icon
@@ -66,7 +68,7 @@ final class AppModel {
         network.start(
             deviceId: configuration.deviceId,
             deviceName: configuration.deviceName,
-            pairingCode: configuration.pairingCode
+            pairingCode: configuration.pairingCode, trustedLAN: trustedLAN
         )
         pasteboardTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.pollPasteboard() }
@@ -76,6 +78,13 @@ final class AppModel {
     func stop() {
         pasteboardTimer?.invalidate()
         network.stop()
+    }
+
+    func setTrustedLAN(_ value: Bool) {
+        configuration.trustedLAN = value
+        trustedLAN = value
+        persist()
+        network.updatePairingCode(configuration.pairingCode, trustedLAN: value)
     }
 
     func setAutoCopy(_ value: Bool) {

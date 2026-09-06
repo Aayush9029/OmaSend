@@ -22,6 +22,14 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./cmd/omasend
+      - run: go build ./cmd/omasend-web
+      - run: go test -race ./internal/web ./internal/daemon ./internal/protocol
+      - name: Package all web companion targets
+        run: VERSION=0.2.0 bash ../scripts/package-web.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: web-companion
+          path: dist/OmaSendWeb_*
 
   macos:
     runs-on: macos-15
@@ -49,5 +57,8 @@ jobs:
       - run: ./tests/installer.ps1
       - run: pip install -r tests/requirements.txt
       - run: python tests/interop.py --bridge windows/OmaSend.Tests/bin/Release/net10.0/OmaSend.Tests.dll
+        env:
+          PYTHONIOENCODING: utf-8
+      - run: python tests/interop.py --lan --bridge windows/OmaSend.Tests/bin/Release/net10.0/OmaSend.Tests.dll
         env:
           PYTHONIOENCODING: utf-8

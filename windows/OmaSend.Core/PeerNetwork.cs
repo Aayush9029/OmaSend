@@ -8,6 +8,7 @@ public sealed record Peer(string Id, string Name, string Host, int Port, string 
 
 public sealed partial class PeerNetwork : IDisposable
 {
+    private readonly bool trustedLAN;
     private readonly string secret, deviceId, deviceName, downloads;
     private readonly CancellationTokenSource lifetime = new();
     private readonly ConcurrentDictionary<string, Peer> peers = new();
@@ -20,8 +21,9 @@ public sealed partial class PeerNetwork : IDisposable
     public event Action<string>? Error;
     public Action<string>? ProtectReceivedFile { get; init; }
     public Peer[] Peers => peers.Values.Where(p => DateTimeOffset.UtcNow - p.LastSeen < TimeSpan.FromSeconds(25)).OrderBy(p => p.Name).ToArray();
-    public PeerNetwork(string id, string name, string pairingCode, string downloadsDirectory, int port = Wire.DefaultPort, IPAddress? bindAddress = null)
+    public PeerNetwork(string id, string name, string pairingCode, string downloadsDirectory, int port = Wire.DefaultPort, IPAddress? bindAddress = null, bool trustedLAN = false)
     {
+        this.trustedLAN = trustedLAN;
         deviceId = id; deviceName = name; secret = pairingCode; downloads = downloadsDirectory;
         listener = new TcpListener(bindAddress ?? IPAddress.IPv6Any, port);
         if (bindAddress is null) listener.Server.DualMode = true;
@@ -65,9 +67,10 @@ public sealed partial class PeerNetwork : IDisposable
             timeout.CancelAfter(TimeSpan.FromSeconds(4));
             using var client = new TcpClient();
             await client.ConnectAsync(host, port, timeout.Token);
+            CheckAddress(client);
             var stream = client.GetStream();
-            await Wire.WriteFrame(stream, Wire.Seal(secret, NewMessage("hello")), timeout.Token);
-            var reply = Wire.Open(secret, await Wire.ReadFrame(stream, timeout.Token));
+            await Wire.WriteFrame(stream, Seal(NewMessage("hello")), timeout.Token);
+            var reply = Open(await Wire.ReadFrame(stream, timeout.Token));
             if (reply.Type == "hello_ack") Upsert(reply, host, port, via);
         }
         catch (Exception ex) when (Expected(ex)) { }
@@ -94,8 +97,9 @@ public sealed partial class PeerNetwork : IDisposable
             try
             {
                 timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                CheckAddress(client);
                 var stream = client.GetStream();
-                var message = Wire.Open(secret, await Wire.ReadFrame(stream, timeout.Token));
+                var message = Open(await Wire.ReadFrame(stream, timeout.Token));
                 if (message.OriginId == deviceId) return;
                 var address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
                 if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
@@ -104,7 +108,7 @@ public sealed partial class PeerNetwork : IDisposable
                 switch (message.Type)
                 {
                     case "hello":
-                        await Wire.WriteFrame(stream, Wire.Seal(secret, NewMessage("hello_ack")), timeout.Token);
+                        await Wire.WriteFrame(stream, Seal(NewMessage("hello_ack")), timeout.Token);
                         break;
                     case "clipboard":
                     case "history_clear":
@@ -130,10 +134,24 @@ public sealed partial class PeerNetwork : IDisposable
                 timeout.CancelAfter(TimeSpan.FromSeconds(10));
                 using var client = new TcpClient();
                 await client.ConnectAsync(peer.Host, peer.Port, timeout.Token);
-                await Wire.WriteFrame(client.GetStream(), Wire.Seal(secret, message), timeout.Token);
+        CheckAddress(client);
+                await Wire.WriteFrame(client.GetStream(), Seal(message), timeout.Token);
             }
             catch (Exception ex) when (Expected(ex)) { if (!lifetime.IsCancellationRequested) Error?.Invoke($"Could not send to {peer.Name}. Check the connection."); }
         }));
+    }
+    private byte[] Seal(Message message) => Wire.Seal(secret, message, trustedLAN);
+    private Message Open(byte[] frame) => Wire.Open(secret, frame, trustedLAN);
+    private void CheckAddress(TcpClient client)
+    {
+        if (trustedLAN && !IsLAN(((IPEndPoint)client.Client.RemoteEndPoint!).Address)) throw new InvalidDataException("Trusted LAN requires a local network address.");
+    }
+    public static bool IsLAN(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        if (IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6UniqueLocal) return true;
+        var b = address.GetAddressBytes();
+        return b.Length == 4 && (b[0] == 10 || b[0] == 172 && b[1] >= 16 && b[1] <= 31 || b[0] == 192 && b[1] == 168 || b[0] == 169 && b[1] == 254);
     }
     private static bool Expected(Exception ex) => ex is IOException or InvalidDataException or SocketException or OperationCanceledException or
         System.Security.Cryptography.CryptographicException or System.Text.Json.JsonException or ArgumentException or FormatException or UnauthorizedAccessException or ObjectDisposedException;

@@ -10,7 +10,17 @@ const FileChunkBytes = 1024 * 1024
 
 var fileAdditionalData = []byte("omasend-file-v1")
 
-func SealFileChunk(secret, transferID string, offset int64, plaintext []byte) ([]byte, error) {
+func SealFileChunk(secret, transferID string, offset int64, plaintext []byte, trustedLAN ...bool) ([]byte, error) {
+	if len(trustedLAN) > 0 && trustedLAN[0] {
+		if offset < 0 || len(plaintext) == 0 || len(plaintext) > FileChunkBytes {
+			return nil, errors.New("invalid file chunk")
+		}
+		payload := make([]byte, 12+len(plaintext))
+		copy(payload, "OSL1")
+		binary.BigEndian.PutUint64(payload[4:12], uint64(offset))
+		copy(payload[12:], plaintext)
+		return payload, nil
+	}
 	return sealFileChunk(secret, transferID, offset, plaintext, nil)
 }
 
@@ -47,7 +57,13 @@ func sealFileChunk(secret, transferID string, offset int64, plaintext, suppliedN
 	return payload, nil
 }
 
-func OpenFileChunk(secret, transferID string, expectedOffset int64, payload []byte) ([]byte, error) {
+func OpenFileChunk(secret, transferID string, expectedOffset int64, payload []byte, trustedLAN ...bool) ([]byte, error) {
+	if len(trustedLAN) > 0 && trustedLAN[0] {
+		if expectedOffset < 0 || len(payload) <= 12 || len(payload) > FileChunkBytes+12 || string(payload[:4]) != "OSL1" || binary.BigEndian.Uint64(payload[4:12]) != uint64(expectedOffset) {
+			return nil, errors.New("invalid LAN file chunk")
+		}
+		return payload[12:], nil
+	}
 	if len(payload) <= 8+12+16 {
 		return nil, errors.New("invalid file chunk")
 	}

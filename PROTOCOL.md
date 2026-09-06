@@ -51,3 +51,14 @@ After the final chunk, the sender provides the full SHA-256 digest in an encrypt
 - Accepted images: PNG, JPEG, and GIF on Linux; images are normalized to PNG on macOS
 
 Configuration and history use user-only permissions. Windows additionally protects them with current-user DPAPI. Windows received files retain Mark of the Web. A device that does not know the pairing code cannot authenticate or decrypt a message. Clipboard history deduplicates item IDs; this version does not provide durable protocol-wide replay protection across application restarts.
+# Optional Trusted LAN mode
+
+Encrypted v1 remains the default. Trusted LAN must be explicitly enabled on both peers; there is no negotiation or fallback from encrypted to plaintext traffic. It uses the same 4-byte big-endian frame length but a distinct JSON envelope:
+
+```json
+{"version":1,"mode":"lan","message":{"version":1,"type":"hello","id":"example","originId":"web","originName":"Web","createdAt":1,"port":53319}}
+```
+
+The nested message follows the existing validation and size limits. File chunks contain ASCII `OSL1`, an 8-byte big-endian nonnegative offset, and 1–1,048,576 plaintext bytes. Resume and completion messages use the LAN JSON envelope. SHA-256 detects accidental file corruption; it does not authenticate a sender in LAN mode.
+
+Only loopback, RFC1918, IPv6 unique-local and link-local unicast addresses are permitted in this mode. Tailscale probing is skipped. Encrypted receivers reject LAN frames. Keys remain stored when a user switches modes, and current peers are cleared. Any participant on an allowed network can impersonate a device or alter plaintext traffic.

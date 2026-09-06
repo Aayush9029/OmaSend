@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import Network
+import Darwin
 
 final class NetworkService: NSObject, @unchecked Sendable {
     var onMessage: ((WireMessage) -> Void)?
@@ -18,12 +19,14 @@ final class NetworkService: NSObject, @unchecked Sendable {
     private var deviceId = ""
     private var deviceName = "Mac"
     private var pairingCode = ""
+    private var trustedLAN = false
     private var port = OmaSendConstants.defaultPort
 
-    func start(deviceId: String, deviceName: String, pairingCode: String, port: UInt16 = OmaSendConstants.defaultPort, discover: Bool = true) {
+    func start(deviceId: String, deviceName: String, pairingCode: String, port: UInt16 = OmaSendConstants.defaultPort, discover: Bool = true, trustedLAN: Bool = false) {
         self.deviceId = deviceId
         self.deviceName = deviceName
         self.pairingCode = pairingCode
+        self.trustedLAN = trustedLAN
         self.port = port
         startListener()
         if discover { startBonjour() }
@@ -41,9 +44,10 @@ final class NetworkService: NSObject, @unchecked Sendable {
         queue.async { [weak self] in self?.listener?.cancel(); self?.listener = nil }
     }
 
-    func updatePairingCode(_ value: String) {
+    func updatePairingCode(_ value: String, trustedLAN: Bool? = nil) {
         queue.async { [weak self] in
             self?.pairingCode = value
+            if let trustedLAN { self?.trustedLAN = trustedLAN }
             self?.peers.removeAll()
             self?.publishPeers()
         }
@@ -114,7 +118,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
         source.schedule(deadline: .now() + 1, repeating: 8)
         source.setEventHandler { [weak self] in
             guard let self else { return }
-            self.probeTailscale()
+            if !self.trustedLAN { self.probeTailscale() }
             for peer in self.peers.values where Date().timeIntervalSince(peer.lastSeen) < 120 {
                 self.sendHello(host: peer.host, port: peer.port, via: peer.via)
             }
@@ -142,16 +146,17 @@ final class NetworkService: NSObject, @unchecked Sendable {
 
     private func handle(_ frame: Data, from connection: NWConnection) {
         let secret = pairingCode
-        guard let message = try? ProtocolCrypto.open(frame, secret: secret), message.originId != deviceId else {
+        guard let message = try? ProtocolCrypto.open(frame, secret: secret, trustedLAN: trustedLAN), message.originId != deviceId else {
             connection.cancel(); return
         }
         let host = remoteHost(connection.endpoint)
+        guard !trustedLAN || Self.isLAN(host) else { connection.cancel(); return }
         let via = host.hasPrefix("100.") ? "Tailscale" : "Local network"
         upsert(PeerDevice(id: message.originId, name: message.originName, host: host, port: message.port ?? OmaSendConstants.defaultPort, via: via, lastSeen: Date()))
         switch message.type {
         case "hello":
             let reply = makeMessage(type: "hello_ack", text: nil)
-            if let sealed = try? ProtocolCrypto.seal(reply, secret: secret), let framed = try? ProtocolCrypto.frame(sealed) {
+            if let sealed = try? ProtocolCrypto.seal(reply, secret: secret, trustedLAN: trustedLAN), let framed = try? ProtocolCrypto.frame(sealed) {
                 connection.send(content: framed, completion: .contentProcessed { _ in connection.cancel() })
             } else { connection.cancel() }
         case "clipboard", "history_clear":
@@ -177,9 +182,10 @@ final class NetworkService: NSObject, @unchecked Sendable {
         _ url: URL, message: WireMessage, peer: PeerDevice,
         completion: @escaping (Bool) -> Void
     ) {
+        guard !trustedLAN || Self.isLAN(peer.host) else { completion(false); return }
         guard let nwPort = NWEndpoint.Port(rawValue: peer.port) else { completion(false); return }
         let offer = fileMessage(type: "file_offer", source: message, filePath: nil)
-        guard let sealed = try? ProtocolCrypto.seal(offer, secret: pairingCode),
+        guard let sealed = try? ProtocolCrypto.seal(offer, secret: pairingCode, trustedLAN: trustedLAN),
               let framed = try? ProtocolCrypto.frame(sealed)
         else { completion(false); return }
         let connection = NWConnection(host: NWEndpoint.Host(peer.host), port: nwPort, using: .tcp)
@@ -193,7 +199,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
                     guard error == nil else { connection.cancel(); completion(false); return }
                     self.receiveFrame(connection) { result in
                         guard case .success(let data) = result,
-                              let reply = try? ProtocolCrypto.open(data, secret: self.pairingCode),
+                              let reply = try? ProtocolCrypto.open(data, secret: self.pairingCode, trustedLAN: self.trustedLAN),
                               reply.type == "file_resume", reply.id == message.id,
                               (reply.resumeOffset ?? 0) >= 0,
                               let fileSize = message.fileSize,
@@ -227,7 +233,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             let count = min(OmaSendConstants.fileChunkBytes, Int(total - offset))
             guard let chunk = try? handle.read(upToCount: count), !chunk.isEmpty,
                   let payload = try? ProtocolCrypto.sealFileChunk(
-                    chunk, transferId: message.id, offset: offset, secret: pairingCode
+                    chunk, transferId: message.id, offset: offset, secret: pairingCode, trustedLAN: trustedLAN
                   ),
                   let framed = try? ProtocolCrypto.frame(payload)
             else { try? handle.close(); connection.cancel(); completion(false); return }
@@ -247,7 +253,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             type: "file_complete", source: message,
             fileSHA256: message.fileSHA256, filePath: nil
         )
-        guard let sealed = try? ProtocolCrypto.seal(complete, secret: pairingCode),
+        guard let sealed = try? ProtocolCrypto.seal(complete, secret: pairingCode, trustedLAN: trustedLAN),
               let framed = try? ProtocolCrypto.frame(sealed)
         else { connection.cancel(); completion(false); return }
         connection.send(content: framed, completion: .contentProcessed { [weak self] error in
@@ -255,7 +261,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             self.receiveFrame(connection) { result in
                 defer { connection.cancel() }
                 guard case .success(let data) = result,
-                      let done = try? ProtocolCrypto.open(data, secret: self.pairingCode),
+                      let done = try? ProtocolCrypto.open(data, secret: self.pairingCode, trustedLAN: self.trustedLAN),
                       done.type == "file_done", done.id == message.id
                 else { completion(false); return }
                 completion(true)
@@ -284,7 +290,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             }
             try handle.seek(toOffset: UInt64(offset))
             let resume = fileMessage(type: "file_resume", source: offer, resumeOffset: offset, filePath: nil)
-            let sealed = try ProtocolCrypto.seal(resume, secret: pairingCode)
+            let sealed = try ProtocolCrypto.seal(resume, secret: pairingCode, trustedLAN: trustedLAN)
             let framed = try ProtocolCrypto.frame(sealed)
             connection.send(content: framed, completion: .contentProcessed { [weak self] error in
                 guard let self, error == nil else { try? handle.close(); connection.cancel(); return }
@@ -308,7 +314,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
             receiveFrame(connection) { [weak self] result in
                 guard let self, case .success(let frame) = result,
                       let chunk = try? ProtocolCrypto.openFileChunk(
-                        frame, transferId: offer.id, expectedOffset: offset, secret: self.pairingCode
+                        frame, transferId: offer.id, expectedOffset: offset, secret: self.pairingCode, trustedLAN: self.trustedLAN
                       ),
                       Int64(chunk.count) <= total - offset
                 else { try? handle.close(); connection.cancel(); return }
@@ -325,7 +331,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
         catch { connection.cancel(); return }
         receiveFrame(connection) { [weak self] result in
             guard let self, case .success(let frame) = result,
-                  let complete = try? ProtocolCrypto.open(frame, secret: self.pairingCode),
+                  let complete = try? ProtocolCrypto.open(frame, secret: self.pairingCode, trustedLAN: self.trustedLAN),
                   complete.type == "file_complete", complete.id == offer.id,
                   let expectedHash = complete.fileSHA256, !expectedHash.isEmpty
             else { connection.cancel(); return }
@@ -343,7 +349,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
                     DispatchQueue.main.async { [self] in self.onMessage?(received) }
                     self.queue.async {
                         let done = self.fileMessage(type: "file_done", source: offer, filePath: nil)
-                        if let sealed = try? ProtocolCrypto.seal(done, secret: self.pairingCode),
+                        if let sealed = try? ProtocolCrypto.seal(done, secret: self.pairingCode, trustedLAN: self.trustedLAN),
                            let framed = try? ProtocolCrypto.frame(sealed) {
                             connection.send(content: framed, completion: .contentProcessed { _ in connection.cancel() })
                         } else { connection.cancel() }
@@ -361,8 +367,9 @@ final class NetworkService: NSObject, @unchecked Sendable {
     }
 
     private func send(_ message: WireMessage, host: String, port: UInt16, expectsReply: Bool, via: String) {
+        guard !trustedLAN || Self.isLAN(host) else { return }
         guard !host.isEmpty, let nwPort = NWEndpoint.Port(rawValue: port),
-              let sealed = try? ProtocolCrypto.seal(message, secret: pairingCode),
+              let sealed = try? ProtocolCrypto.seal(message, secret: pairingCode, trustedLAN: trustedLAN),
               let framed = try? ProtocolCrypto.frame(sealed)
         else { return }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
@@ -375,7 +382,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
                     self.receiveFrame(connection) { result in
                         defer { connection.cancel() }
                         guard case .success(let data) = result,
-                              let reply = try? ProtocolCrypto.open(data, secret: self.pairingCode),
+                              let reply = try? ProtocolCrypto.open(data, secret: self.pairingCode, trustedLAN: self.trustedLAN),
                               reply.type == "hello_ack"
                         else { return }
                         self.upsert(PeerDevice(id: reply.originId, name: reply.originName, host: host, port: port, via: via, lastSeen: Date()))
@@ -518,6 +525,20 @@ final class NetworkService: NSObject, @unchecked Sendable {
         return candidates.first(where: FileManager.default.isExecutableFile(atPath:)).map(URL.init(fileURLWithPath:))
     }
 
+    static func isLAN(_ host: String) -> Bool {
+        let literal = String(host.split(separator: "%", omittingEmptySubsequences: false)[0])
+        if let ip = IPv4Address(literal) {
+            let b = Array(ip.rawValue)
+            return b[0] == 127 || b[0] == 10 || b[0] == 172 && (16...31).contains(b[1]) || b[0] == 192 && b[1] == 168 || b[0] == 169 && b[1] == 254
+        }
+        guard let ip = IPv6Address(literal) else { return false }
+        let b = Array(ip.rawValue)
+        if b.prefix(10).allSatisfy({ $0 == 0 }), b[10] == 255, b[11] == 255 {
+            return isLAN(b.suffix(4).map { String($0) }.joined(separator: "."))
+        }
+        return literal == "::1" || b[0] & 0xfe == 0xfc || b[0] == 0xfe && b[1] & 0xc0 == 0x80
+    }
+
     private func remoteHost(_ endpoint: NWEndpoint) -> String {
         guard case .hostPort(let host, _) = endpoint else { return "" }
         return String(describing: host).trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
@@ -538,11 +559,18 @@ extension NetworkService: NetServiceBrowserDelegate, NetServiceDelegate {
 
     func netServiceDidResolveAddress(_ sender: NetService) {
         defer { resolving.removeAll { $0 === sender } }
-        guard let host = sender.hostName else { return }
+        let hosts: [String] = (sender.addresses ?? []).compactMap { data in
+            data.withUnsafeBytes { bytes -> String? in
+                guard bytes.count >= MemoryLayout<sockaddr>.size, let base = bytes.baseAddress else { return nil }
+                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                guard getnameinfo(base.assumingMemoryBound(to: sockaddr.self), socklen_t(bytes.count), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { return nil }
+                return String(cString: host)
+            }
+        }
         let record = sender.txtRecordData().map(NetService.dictionary(fromTXTRecord:)) ?? [:]
         guard let idData = record["id"], let id = String(data: idData, encoding: .utf8), id != deviceId else { return }
         let resolvedPort = sender.port > 0 ? UInt16(sender.port) : port
-        queue.async { [weak self] in self?.sendHello(host: host, port: resolvedPort, via: "Local network") }
+        for host in hosts { queue.async { [weak self] in self?.sendHello(host: host, port: resolvedPort, via: "Local network") } }
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {

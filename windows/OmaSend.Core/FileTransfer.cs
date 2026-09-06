@@ -63,11 +63,12 @@ public sealed partial class PeerNetwork
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
         using var client = new TcpClient();
         await client.ConnectAsync(peer.Host, peer.Port, timeout.Token);
+        CheckAddress(client);
         timeout.CancelAfter(TimeSpan.FromMinutes(30));
         var ct = timeout.Token;
         var stream = client.GetStream();
-        await Wire.WriteFrame(stream, Wire.Seal(secret, message with { Type = "file_offer", FilePath = null }), ct);
-        var resume = Wire.Open(secret, await Wire.ReadFrame(stream, ct));
+        await Wire.WriteFrame(stream, Seal(message with { Type = "file_offer", FilePath = null }), ct);
+        var resume = Open(await Wire.ReadFrame(stream, ct));
         long offset = resume.ResumeOffset ?? 0, size = message.FileSize!.Value;
         if (resume.Type != "file_resume" || resume.Id != message.Id || offset < 0 || offset > size) throw new InvalidDataException();
         await using var file = File.OpenRead(message.FilePath!);
@@ -76,11 +77,11 @@ public sealed partial class PeerNetwork
         {
             byte[] chunk = new byte[(int)Math.Min(Wire.ChunkSize, size - offset)];
             await file.ReadExactlyAsync(chunk, ct);
-            await Wire.WriteFrame(stream, Wire.SealChunk(secret, message.Id, offset, chunk), ct);
+            await Wire.WriteFrame(stream, Wire.SealChunk(secret, message.Id, offset, chunk, trustedLAN: trustedLAN), ct);
             offset += chunk.Length;
         }
-        await Wire.WriteFrame(stream, Wire.Seal(secret, NewMessage("file_complete") with { Id = message.Id, FileSha256 = message.FileSha256 }), ct);
-        var done = Wire.Open(secret, await Wire.ReadFrame(stream, ct));
+        await Wire.WriteFrame(stream, Seal(NewMessage("file_complete") with { Id = message.Id, FileSha256 = message.FileSha256 }), ct);
+        var done = Open(await Wire.ReadFrame(stream, ct));
         if (done.Type != "file_done" || done.Id != message.Id) throw new InvalidDataException("Missing file acknowledgement.");
     }
     private async Task ReceiveFile(Stream stream, Message offer, CancellationToken ct)
@@ -105,17 +106,17 @@ public sealed partial class PeerNetwork
                 var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(downloads))!);
                 if (size - offset > drive.AvailableFreeSpace - 64 * 1024 * 1024) throw new IOException("Not enough disk space.");
                 file.Position = offset;
-                await Wire.WriteFrame(stream, Wire.Seal(secret, NewMessage("file_resume") with { Id = offer.Id, ResumeOffset = offset }), ct);
+                await Wire.WriteFrame(stream, Seal(NewMessage("file_resume") with { Id = offer.Id, ResumeOffset = offset }), ct);
                 while (offset < size)
                 {
-                    var chunk = Wire.OpenChunk(secret, offer.Id, offset, await Wire.ReadFrame(stream, ct));
+                    var chunk = Wire.OpenChunk(secret, offer.Id, offset, await Wire.ReadFrame(stream, ct), trustedLAN);
                     if (chunk.LongLength > size - offset) throw new InvalidDataException();
                     await file.WriteAsync(chunk, ct);
                     offset += chunk.Length;
                 }
                 await file.FlushAsync(ct);
             }
-            var complete = Wire.Open(secret, await Wire.ReadFrame(stream, ct));
+            var complete = Open(await Wire.ReadFrame(stream, ct));
             string hash = await HashFile(partial, ct);
             if (complete.Type != "file_complete" || complete.Id != offer.Id || complete.FileSha256 != hash ||
                 (offer.FileSha256 is not null && offer.FileSha256 != hash))
@@ -133,7 +134,7 @@ public sealed partial class PeerNetwork
                 { final = Path.Combine(downloads, $"{Path.GetFileNameWithoutExtension(name)} {index}{Path.GetExtension(name)}"); }
             }
             Received?.Invoke(offer with { Type = "file", FileName = name, FilePath = final, FileSha256 = hash });
-            await Wire.WriteFrame(stream, Wire.Seal(secret, NewMessage("file_done") with { Id = offer.Id }), ct);
+            await Wire.WriteFrame(stream, Seal(NewMessage("file_done") with { Id = offer.Id }), ct);
         }
         finally { transfers.TryRemove(key, out _); }
     }

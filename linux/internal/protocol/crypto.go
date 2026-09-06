@@ -17,7 +17,10 @@ import (
 
 var additionalData = []byte("omasend-v1")
 
-func Seal(secret string, message model.Message) ([]byte, error) {
+func Seal(secret string, message model.Message, trustedLAN ...bool) ([]byte, error) {
+	if len(trustedLAN) > 0 && trustedLAN[0] {
+		return json.Marshal(lanEnvelope{1, "lan", message})
+	}
 	gcm, err := makeGCM(secret)
 	if err != nil {
 		return nil, err
@@ -54,7 +57,23 @@ func sealWithNonce(gcm cipher.AEAD, nonce []byte, message model.Message) ([]byte
 	return json.Marshal(envelope)
 }
 
-func Open(secret string, data []byte) (model.Message, error) {
+type lanEnvelope struct {
+	Version int           `json:"version"`
+	Mode    string        `json:"mode"`
+	Message model.Message `json:"message"`
+}
+
+func Open(secret string, data []byte, trustedLAN ...bool) (model.Message, error) {
+	if len(data) > model.MaxFrame {
+		return model.Message{}, errors.New("frame too large")
+	}
+	if len(trustedLAN) > 0 && trustedLAN[0] {
+		var envelope lanEnvelope
+		if json.Unmarshal(data, &envelope) != nil || envelope.Version != 1 || envelope.Mode != "lan" {
+			return model.Message{}, errors.New("not a Trusted LAN message")
+		}
+		return validateMessage(envelope.Message)
+	}
 	var envelope model.Envelope
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return model.Message{}, fmt.Errorf("decode envelope: %w", err)
@@ -82,6 +101,10 @@ func Open(secret string, data []byte) (model.Message, error) {
 	if err := json.Unmarshal(plain, &message); err != nil {
 		return model.Message{}, errors.New("invalid message")
 	}
+	return validateMessage(message)
+}
+
+func validateMessage(message model.Message) (model.Message, error) {
 	if message.Version != model.ProtocolVersion || message.ID == "" || message.OriginID == "" {
 		return model.Message{}, errors.New("invalid message fields")
 	}

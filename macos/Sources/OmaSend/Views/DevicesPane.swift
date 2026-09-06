@@ -7,6 +7,10 @@ struct DevicesPane: View {
         SettingsForm {
             Section("Pairing") {
                 LabeledContent("This Mac", value: model.deviceName)
+                Toggle("Trusted LAN · no pairing key", isOn: Binding(get: { model.trustedLAN }, set: { model.setTrustedLAN($0) }))
+                if model.trustedLAN {
+                    Text("Unencrypted. Anyone on this local network can read or send items.").font(.callout).foregroundStyle(.secondary)
+                } else {
                 HStack {
                     Button("Copy Pairing Code") { model.copyPairingCode() }
                     Button("Pair Another Device...") { model.promptForPairingCode() }
@@ -14,6 +18,7 @@ struct DevicesPane: View {
                     Button("Reset Code...", role: .destructive) { model.regeneratePairingCode() }
                 }
                 .controlSize(.small)
+                }
             }
 
             Section("Connected Devices") {
@@ -21,7 +26,7 @@ struct DevicesPane: View {
                     ContentUnavailableView(
                         "No Devices Found",
                         systemImage: "desktopcomputer.trianglebadge.exclamationmark",
-                        description: Text("Open OmaSend on a paired Linux computer.")
+                        description: Text("Use the same sharing mode on your other devices.")
                     )
                 } else {
                     ForEach(model.peers) { peer in
@@ -35,7 +40,7 @@ struct DevicesPane: View {
             }
 
             Section("Privacy") {
-                Text("Clipboard text is encrypted with your pairing code before it leaves this Mac.")
+                Text(model.trustedLAN ? "Trusted LAN sharing is unencrypted." : "Clipboard and files are encrypted with your pairing code.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

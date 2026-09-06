@@ -8,7 +8,7 @@ const string secret = "omasend-test-secret-0123456789-abcdef";
 if (args.Contains("--bridge"))
 {
     var inbox = new ConcurrentQueue<Message>();
-    using var node = new PeerNetwork("windows-test", "Windows test", secret, args[Array.IndexOf(args, "--bridge") + 1], 0, IPAddress.Loopback);
+    using var node = new PeerNetwork("windows-test", "Windows test", secret, args[Array.IndexOf(args, "--bridge") + 1], 0, IPAddress.Loopback, trustedLAN: args.Contains("--lan"));
     node.Received += inbox.Enqueue;
     Console.WriteLine(JsonSerializer.Serialize(new { port = node.Port }, Wire.Json));
     while (Console.ReadLine() is string line)
@@ -40,6 +40,17 @@ void Check(bool condition, string label) { if (!condition) throw new Exception(l
 void Reject(Action action, string label) { try { action(); } catch { Check(true, label); return; } throw new Exception("Accepted " + label); }
 var item = new Message { OriginId = "test", Type = "clipboard", Text = "Unicode 👋\n你好", ContentType = "text/plain" };
 Check(Wire.Open(secret, Wire.Seal(secret, item)).Text == item.Text, "UTF-8 encrypted roundtrip");
+var lanFrame = Wire.Seal(secret, item, true);
+Check(Wire.Open("different", lanFrame, true).Text == item.Text, "Trusted LAN works without matching keys");
+Reject(() => Wire.Open(secret, lanFrame), "encrypted mode rejects plaintext");
+Reject(() => Wire.Open(secret, Wire.Seal(secret, item), true), "LAN mode rejects encrypted envelope");
+var lanChunk = Wire.SealChunk(secret, "x", 4096, "OmaSend file chunk"u8.ToArray(), trustedLAN: true);
+Check(Convert.ToHexStringLower(lanChunk) == "4f534c3100000000000010004f6d6153656e642066696c65206368756e6b", "LAN chunk matches Go and Swift vector");
+Check(Wire.OpenChunk("different", "x", 4096, lanChunk, true).SequenceEqual("OmaSend file chunk"u8.ToArray()), "LAN file roundtrip");
+Reject(() => Wire.OpenChunk(secret, "x", 0, lanChunk, true), "LAN offset checked");
+Reject(() => Wire.OpenChunk(secret, "x", 4096, lanChunk), "LAN chunk rejected by encrypted mode");
+foreach (var ip in new[] { "127.0.0.1", "192.168.1.2", "172.16.1.2", "10.0.0.1", "::1", "fd00::1", "fe80::1" }) Check(PeerNetwork.IsLAN(IPAddress.Parse(ip)), "LAN address " + ip);
+foreach (var ip in new[] { "8.8.8.8", "100.64.1.2", "172.32.1.2", "ff02::1" }) Check(!PeerNetwork.IsLAN(IPAddress.Parse(ip)), "non-LAN address " + ip);
 const string vector = "{\"version\":1,\"nonce\":\"AAECAwQFBgcICQoL\",\"ciphertext\":\"BuLeQaS379eOUMKOqEQkmh/VItWh+DDVCEpm+aX9PgUW+hi7WSjtc1AkBkakzCrnyad5Iu8KDPnYSUCpct+jYu5X8nWbPJzO+zbgXMlzG7ZEigRZlzBagX3AnwmZH1Rk4wQw2kH62UJGHdtVLv43+3dwdsJVa/eQP+4yVhC/tmhANG7kw4iN7bjsz0q3aRHc0z1B+mf++WeF\"}";
 Check(Wire.Open(secret, Encoding.UTF8.GetBytes(vector)).Text == "OmaSend interop", "existing Go/Swift vector");
 Reject(() => Wire.Open("wrong-code-0123456789012345", Wire.Seal(secret, item)), "wrong key");

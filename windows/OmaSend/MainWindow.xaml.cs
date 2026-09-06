@@ -69,7 +69,7 @@ public partial class MainWindow : Window
         {
             string downloads = Environment.GetEnvironmentVariable("OMASEND_DOWNLOADS") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "OmaSend");
             int port = int.TryParse(Environment.GetEnvironmentVariable("OMASEND_PORT"), out int p) && p is > 0 and < 65536 ? p : Wire.DefaultPort;
-            var current = new PeerNetwork(settings.DeviceId, settings.DeviceName, settings.PairingCode, downloads, port)
+            var current = new PeerNetwork(settings.DeviceId, settings.DeviceName, settings.PairingCode, downloads, port, trustedLAN: settings.TrustedLAN)
             {
                 // Preserve Attachment Manager / SmartScreen behavior for files arriving over the network.
                 ProtectReceivedFile = path => File.WriteAllText(path + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\n")
@@ -180,9 +180,14 @@ public partial class MainWindow : Window
         ShowDetail("settings", "Settings");
         var panel = DetailContent;
         void Label(string text) => panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });
-        Label("Pairing code");
-        var code = new PasswordBox { Password = settings.PairingCode, MaxLength = 1024, Margin = new Thickness(0, 6, 0, 8) }; panel.Children.Add(code);
-        var copy = new Button { Content = "Copy code", Margin = new Thickness(0, 0, 0, 16) }; copy.Click += (_, _) => clipboard.CopySecret(settings.PairingCode); panel.Children.Add(copy);
+        var lan = new CheckBox { Content = "Trusted LAN · no pairing key", IsChecked = settings.TrustedLAN, Margin = new Thickness(0, 0, 0, 8) }; panel.Children.Add(lan);
+        Label("Unencrypted. Anyone on this local network can read or send items.");
+        var pairing = new StackPanel { Margin = new Thickness(0, 12, 0, 0) }; panel.Children.Add(pairing);
+        pairing.Children.Add(new TextBlock { Text = "Pairing code" });
+        var code = new PasswordBox { Password = settings.PairingCode, MaxLength = 1024, Margin = new Thickness(0, 6, 0, 8) }; pairing.Children.Add(code);
+        var copy = new Button { Content = "Copy code", Margin = new Thickness(0, 0, 0, 16) }; copy.Click += (_, _) => clipboard.CopySecret(settings.PairingCode); pairing.Children.Add(copy);
+        void UpdatePairing() => pairing.Visibility = lan.IsChecked == true ? Visibility.Collapsed : Visibility.Visible;
+        lan.Checked += (_, _) => UpdatePairing(); lan.Unchecked += (_, _) => UpdatePairing(); UpdatePairing();
         Label("Device name"); var name = new TextBox { Text = settings.DeviceName, MaxLength = 100, Margin = new Thickness(0, 6, 0, 16) }; panel.Children.Add(name);
         Label("Peer addresses (optional)");
         var hosts = new TextBox { Text = string.Join("\n", settings.Hosts), AcceptsReturn = true, Height = 62, Margin = new Thickness(0, 6, 0, 16) }; panel.Children.Add(hosts);
@@ -194,6 +199,7 @@ public partial class MainWindow : Window
         {
             string secret = code.Password.Trim();
             if (secret.Length < 20) { status.Text = "Pairing codes must contain at least 20 characters."; return; }
+            settings.TrustedLAN = lan.IsChecked == true;
             settings.PairingCode = secret; settings.DeviceName = string.IsNullOrWhiteSpace(name.Text) ? Environment.MachineName : name.Text.Trim();
             settings.Hosts = hosts.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().Take(32).ToArray();
             try { SetStartup(startup.IsChecked == true); }
