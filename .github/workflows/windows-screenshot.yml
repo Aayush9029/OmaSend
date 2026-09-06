@@ -1,0 +1,18 @@
+name: Windows screenshot
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screenshot:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project windows/OmaSend.Screenshots -c Release -- screenshot/omasend-windows.png
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-screenshot
+          path: screenshot/omasend-windows.png
