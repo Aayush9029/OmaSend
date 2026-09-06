@@ -29,3 +29,11 @@ For Windows, populate the isolated running app using `tests/windows_ui.py`, open
 ## Releases
 
 CI tests and builds all three platforms. The release workflow tests again, packages Windows x64/ARM64, Linux amd64/arm64, and macOS ARM64, then creates a draft containing a combined checksum manifest and Windows installer. A maintainer validates the draft assets before publishing it. No signing credentials are currently configured in this repository. The existing macOS Developer ID packaging script is preserved for a signing-capable machine.
+
+## Windows README capture
+
+Run the **Windows screenshot** workflow to render the current native WPF window on a Windows runner. The `OmaSend.Screenshots` harness uses isolated settings, disables network discovery, and supplies sample clipboard history. Download `windows-screenshot`, inspect the PNG, and replace `assets/screenshots/omasend-windows.png`. It is a native app render, not a photograph of the user's desktop; the README labels this distinction.
+
+## Homebrew updates
+
+This repository doubles as the `aayush9029/omasend` tap through its explicit Git URL. After publishing a macOS release, update `Casks/omasend.rb` with the version and the archive SHA-256. The Homebrew workflow parses the cask and fetches the real archive to verify its checksum.

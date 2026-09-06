@@ -2,7 +2,7 @@
 
 ## Windows 11
 
-Download the **Windows x64** or **Windows ARM64** ZIP from [Releases](https://github.com/Aayush9029/OmaSend/releases/latest), extract it, and open `OmaSend.exe`. The .NET runtime is included.
+Windows is currently a preview; no Windows release has been published yet. Published Windows x64 and ARM64 ZIPs will include the .NET runtime. Current unsigned builds can be blocked by Smart App Control.
 
 For a per-user installation with a Start menu shortcut, download `install.ps1` from the same release, review it, and run it from PowerShell using your normal execution policy:
 
@@ -33,7 +33,15 @@ Use the Linux installer above. When both `omarchy` and `omarchy-shell` are avail
 
 ## macOS
 
-Download the macOS ARM64 ZIP from [Releases](https://github.com/Aayush9029/OmaSend/releases/latest), extract it, and move OmaSend to Applications. macOS 15 or later is required. The automated build uses an ad-hoc signature and is not notarized; it may be blocked by your Mac's normal security policy. No security settings are changed by OmaSend.
+With Homebrew installed, run:
+
+```bash
+brew tap aayush9029/omasend https://github.com/Aayush9029/OmaSend && brew install --cask aayush9029/omasend/omasend
+```
+
+The cask is pinned to the published macOS release and its SHA-256 hash.
+
+Alternatively, download the macOS ARM64 ZIP from [Releases](https://github.com/Aayush9029/OmaSend/releases/latest), extract it, and move OmaSend to Applications. macOS 15 or later is required. The automated build uses an ad-hoc signature and is not notarized; it may be blocked by your Mac's normal security policy. No security settings are changed by OmaSend.
 
 The existing Developer ID/notarization packaging script remains available for maintainers with signing credentials. To build from source with Xcode command-line tools:
 
