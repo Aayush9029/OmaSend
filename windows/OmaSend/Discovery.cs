@@ -24,7 +24,7 @@ public sealed class Discovery : IDisposable
         this.network = network; hosts = settings.Hosts; trustedLAN = settings.TrustedLAN;
         services = new ServiceDiscovery(mdns);
         profile = new ServiceProfile("OmaSend-" + settings.DeviceId, "_omasend._tcp", (ushort)network.Port);
-        profile.AddProperty("v", "1"); profile.AddProperty("id", settings.DeviceId); profile.AddProperty("name", settings.DeviceName);
+        profile.AddProperty("v", "1"); profile.AddProperty("id", settings.DeviceId); profile.AddProperty("name", settings.DeviceName); profile.AddProperty("platform", "windows");
         services.ServiceInstanceDiscovered += (_, e) =>
         {
             if (!e.ServiceInstanceName.ToString().TrimEnd('.').EndsWith("._omasend._tcp.local", StringComparison.OrdinalIgnoreCase)) return;

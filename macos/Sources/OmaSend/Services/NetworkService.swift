@@ -101,7 +101,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
         let suffix = String(deviceId.prefix(6))
         let service = NetService(domain: "local.", type: OmaSendConstants.serviceType, name: "\(deviceName)-\(suffix)", port: Int32(port))
         service.setTXTRecord(NetService.data(fromTXTRecord: [
-            "v": Data("1".utf8), "id": Data(deviceId.utf8), "name": Data(deviceName.utf8),
+            "v": Data("1".utf8), "id": Data(deviceId.utf8), "name": Data(deviceName.utf8), "platform": Data("darwin".utf8),
         ]))
         service.delegate = self
         service.publish()

@@ -44,7 +44,7 @@ func New(node *daemon.Daemon, uploads string, addresses []string) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		if !s.hosts[strings.ToLower(r.Host)] || !daemon.IsLAN(remoteIP(r)) {
 			http.Error(w, "Local network access only", http.StatusForbidden)
 			return
@@ -70,10 +70,14 @@ func New(node *daemon.Daemon, uploads string, addresses []string) http.Handler {
 			return
 		}
 		switch r.URL.Path {
-		case "/", "/app.js", "/icons.js", "/style.css":
+		case "/", "/app.js", "/licenses.txt", "/favicon.svg":
 			files.ServeHTTP(w, r)
 		default:
-			http.NotFound(w, r)
+			if strings.HasPrefix(r.URL.Path, "/assets/") {
+				files.ServeHTTP(w, r)
+			} else {
+				http.NotFound(w, r)
+			}
 		}
 	})
 }
@@ -112,10 +116,12 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 				items[i].Thumbnail = ""
 			}
 			reply(w, struct {
-				Status  any  `json:"status"`
-				History any  `json:"history"`
-				Admin   bool `json:"admin"`
-			}{s.node.BrowserStatus(), items, remoteIP(r).IsLoopback()})
+				Status   any    `json:"status"`
+				History  any    `json:"history"`
+				Admin    bool   `json:"admin"`
+				Devices  any    `json:"devices"`
+				Platform string `json:"platform"`
+			}{s.node.BrowserStatus(), items, remoteIP(r).IsLoopback(), s.node.BrowserDevices(), s.node.BrowserPlatform()})
 		case "/api/download":
 			s.download(w, r)
 		default:

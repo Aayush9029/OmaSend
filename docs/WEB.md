@@ -26,7 +26,9 @@ Stop with Ctrl+C. `--data PATH` chooses the storage directory; `--port NUMBER` c
 
 ## Connect
 
-Encrypted sharing is the default. From the host's **localhost** page, choose **Change sharing mode**, paste the key from a native app and select **Use key**. Native devices with the same key are discovered automatically. If discovery is unavailable, use **Connect a device** with its local IP and port (normally 53317).
+Nearby devices appear automatically under **Devices**. A green dot means connected; amber means discovered but not connected. The companion queries each active LAN adapter, resolves split Bonjour replies, refreshes discovery every eight seconds, and retries the handshake automatically. Discovery does not bypass pairing.
+
+Encrypted sharing is the default. Open **Settings** on the host’s localhost page, paste the native app’s **Pairing key**, and choose **Pair**. Devices with the same key connect automatically. Manual IP entry is only a fallback under **Settings → Advanced**.
 
 For key-free sharing, enable **Trusted LAN** in the companion and on every native device:
 
@@ -48,13 +50,17 @@ Only the hosting computer's localhost page can change the companion's sharing mo
 
 ## Appearance and history
 
-Use the appearance button to switch between light and dark; the browser remembers your choice. Search recent items by text, file name, or device name, and filter by **All**, **Text**, or **Files**.
+Open **Settings** to switch between light and dark; the browser remembers your choice. Search recent items by text, file name, or device name, and filter by **All**, **Text**, or **Files**.
 
-The interface and its Lucide icons are embedded in the executable and work offline. The icon subset comes from `lucide-static` 1.41.0 on npm; its [ISC / MIT notices](licenses/lucide.txt) are included in the bundled JavaScript. No Node.js installation is required to build or run the companion.
+The React interface uses Tailwind CSS, Radix components, Lucide actions, and Simple Icons OS marks. Assets are embedded and work offline. Platform metadata is advertised by updated native apps; older device names provide a fallback, and unknown platforms use a monitor icon. Settings load on demand; polling pauses in hidden tabs and unchanged history preserves existing rows. Motion respects reduced-motion preferences.
+
+The executable includes third-party notices at `/licenses.txt`. The script policy remains same-origin only; inline styles are permitted for Radix positioning and focus/scroll management.
 
 ## Build from source
 
-With Go 1.24 or newer, from the repository:
+Compiled frontend assets are committed, so Go 1.25 or newer is sufficient to build the executable. To change the UI, first use Node.js 22.12+ and run `cd web && npm ci && npm run build`. CI verifies that source and compiled assets match.
+
+From the repository:
 
 ```sh
 cd linux && go build -o omasend-web ./cmd/omasend-web

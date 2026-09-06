@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"runtime"
+	"sort"
 	"time"
 
 	"github.com/Aayush9029/OmaSend/linux/internal/ipc"
@@ -86,4 +88,38 @@ func (d *Daemon) BrowserFile(ctx context.Context, path, name string, size int64)
 		}
 	}
 	return result, nil
+}
+
+// BrowserDevice keeps discovery separate from authenticated connections.
+type BrowserDevice struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Platform  string `json:"platform,omitempty"`
+	Connected bool   `json:"connected"`
+}
+
+func (d *Daemon) BrowserPlatform() string { return runtime.GOOS }
+func (d *Daemon) BrowserDevices() []BrowserDevice {
+	devices := map[string]BrowserDevice{}
+	d.mu.RLock()
+	for _, found := range d.candidates {
+		if !found.Seen.IsZero() && time.Since(found.Seen) > 5*time.Minute {
+			continue
+		}
+		devices[found.ID] = BrowserDevice{ID: found.ID, Name: found.Name, Platform: found.Platform}
+	}
+	d.mu.RUnlock()
+	for _, peer := range d.activePeers(25 * time.Second) {
+		device := devices[peer.ID]
+		device.ID = peer.ID
+		device.Name = peer.Name
+		device.Connected = true
+		devices[peer.ID] = device
+	}
+	result := make([]BrowserDevice, 0, len(devices))
+	for _, device := range devices {
+		result = append(result, device)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
 }

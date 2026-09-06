@@ -67,7 +67,9 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 	shutdownBonjour, bonjourErr := discovery.Start(ctx, snapshot.DeviceID, snapshot.DeviceName, d.port, func(found discovery.Found) {
 		// Discovery is unauthenticated. Keep candidates separate until hello succeeds.
 		d.mu.Lock()
-		if len(d.candidates) < 128 {
+		address := net.JoinHostPort(found.Host, strconv.Itoa(found.Port))
+		_, exists := d.candidates[address]
+		if len(d.candidates) < 128 || exists {
 			d.candidates[net.JoinHostPort(found.Host, strconv.Itoa(found.Port))] = found
 		}
 		d.mu.Unlock()
@@ -92,12 +94,16 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 		case <-probeTicker.C:
 			go d.probeTailscale(ctx)
 		case <-helloTicker.C:
-			d.mu.RLock()
+			d.mu.Lock()
 			candidates := make([]discovery.Found, 0, len(d.candidates))
-			for _, found := range d.candidates {
+			for address, found := range d.candidates {
+				if !found.Seen.IsZero() && time.Since(found.Seen) > 5*time.Minute {
+					delete(d.candidates, address)
+					continue
+				}
 				candidates = append(candidates, found)
 			}
-			d.mu.RUnlock()
+			d.mu.Unlock()
 			for _, found := range candidates {
 				go d.sendHello(ctx, found.Host, found.Port, "Local network")
 			}
