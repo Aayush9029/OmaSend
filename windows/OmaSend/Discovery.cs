@@ -17,10 +17,11 @@ public sealed class Discovery : IDisposable
     private readonly ServiceProfile profile;
     private readonly PeerNetwork network;
     private readonly string[] hosts;
+    private readonly bool trustedLAN;
     private readonly CancellationTokenSource lifetime = new();
     public Discovery(PeerNetwork network, Settings settings)
     {
-        this.network = network; hosts = settings.Hosts;
+        this.network = network; hosts = settings.Hosts; trustedLAN = settings.TrustedLAN;
         services = new ServiceDiscovery(mdns);
         profile = new ServiceProfile("OmaSend-" + settings.DeviceId, "_omasend._tcp", (ushort)network.Port);
         profile.AddProperty("v", "1"); profile.AddProperty("id", settings.DeviceId); profile.AddProperty("name", settings.DeviceName);
@@ -81,7 +82,7 @@ public sealed class Discovery : IDisposable
             {
                 services.QueryServiceInstances("_omasend._tcp");
                 foreach (string host in hosts) _ = network.Probe(host.Trim());
-                await ProbeTailscale();
+                if (!trustedLAN) await ProbeTailscale();
             } while (await timer.WaitForNextTickAsync(lifetime.Token));
         }
         catch (OperationCanceledException) { }

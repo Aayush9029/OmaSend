@@ -57,7 +57,7 @@ Open OmaSend in a browser on your local network. Send text, attach files, copy s
 cd linux && go run ./cmd/omasend-web
 ```
 
-Open **http://localhost:53318**. Add `--listen 0.0.0.0:53318` to make it available to other browsers on your LAN. [Setup, packaged builds and browser limits](docs/WEB.md).
+Open **http://localhost:53318**. Add `--lan YOUR_LAN_IP` to make it available to other browsers on that network. [Setup, packaged builds and browser limits](docs/WEB.md).
 
 ## Pair your devices
 

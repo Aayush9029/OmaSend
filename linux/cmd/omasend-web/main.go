@@ -24,6 +24,8 @@ func main() {
 }
 func run() error {
 	listen := flag.String("listen", "127.0.0.1:53318", "HTTP address; use 0.0.0.0:53318 to allow other LAN browsers (unencrypted HTTP)")
+	lan := flag.String("lan", "", "also serve HTTP on this private IP, e.g. 192.168.1.20 (unencrypted)")
+	name := flag.String("name", "", "display name for this browser companion")
 	root, _ := os.UserConfigDir()
 	data := flag.String("data", filepath.Join(root, "omasend-web"), "private companion data directory")
 	port := flag.Int("port", 53319, "native peer port; separate from the desktop app")
@@ -34,6 +36,11 @@ func run() error {
 	store, err := config.Open(filepath.Join(*data, "config.json"))
 	if err != nil {
 		return err
+	}
+	if *name != "" {
+		if err = store.SetDeviceName(*name); err != nil {
+			return err
+		}
 	}
 	_ = os.Setenv("OMASEND_PORT", fmt.Sprint(*port))
 	_ = os.Setenv("OMASEND_DOWNLOADS", filepath.Join(*data, "received"))
@@ -47,14 +54,40 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	listeners := []net.Listener{listener}
+	if *lan != "" {
+		ip := net.ParseIP(*lan)
+		if !daemon.IsLAN(ip) || ip.IsLoopback() {
+			return fmt.Errorf("--lan needs a private LAN IP address")
+		}
+		_, httpPort, _ := net.SplitHostPort(listener.Addr().String())
+		extra, err := net.Listen("tcp", net.JoinHostPort(ip.String(), httpPort))
+		if err != nil {
+			return err
+		}
+		defer extra.Close()
+		additional, err := web.Addresses(extra)
+		if err != nil {
+			return err
+		}
+		addresses = append(addresses, additional...)
+		listeners = append(listeners, extra)
+	}
 	server := web.HTTPServer(*listen, web.New(node, filepath.Join(*data, "uploads"), addresses))
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	done := make(chan error, 2)
+	done := make(chan error, len(listeners)+1)
 	go func() { done <- node.RunBrowser(ctx) }()
-	go func() { done <- server.Serve(listener) }()
+	for _, bound := range listeners {
+		go func(l net.Listener) { done <- server.Serve(l) }(bound)
+	}
 	fmt.Println("OmaSend Web — open in your browser:")
+	printed := map[string]bool{}
 	for _, a := range addresses {
+		if printed[a] {
+			continue
+		}
+		printed[a] = true
 		fmt.Println(" ", web.URL(a))
 	}
 	fmt.Println("Sharing mode is encrypted by default. Change mode from the hosting computer's localhost page.")

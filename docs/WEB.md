@@ -20,9 +20,9 @@ macOS / Linux:
 
 Open **http://localhost:53318** on the hosting computer. The companion has its own history and identity and uses native peer port **53319**, so it can coexist with the desktop app on port 53317. It does not monitor the host's OS clipboard.
 
-To allow browsers on other computers on your LAN, run with `--listen 0.0.0.0:53318` instead. Open the printed `http://192.168.…:53318` address on your other computer. The browser connection is unencrypted HTTP and all local browsers that can reach it share one inbox; do this only on a network you trust. Allow TCP 53318 (browser), TCP 53319 (native transfers) and UDP 5353 (discovery) through your firewall if necessary. The app does not change firewall rules.
+To allow browsers on another computer, add `--lan YOUR_LAN_IP`, for example `--lan 192.168.1.20`. This keeps localhost available for settings and exposes only that interface. Alternatively, `--listen 0.0.0.0:53318` listens on all interfaces. Open the printed `http://192.168.…:53318` address on your other computer. The browser connection is unencrypted HTTP and all local browsers that can reach it share one inbox; do this only on a network you trust. Allow TCP 53318 (browser), TCP 53319 (native transfers) and UDP 5353 (discovery) through your firewall if necessary. The app does not change firewall rules.
 
-Stop with Ctrl+C. `--data PATH` chooses the storage directory; `--port NUMBER` changes the native peer port. Default data is in your OS user configuration directory under `omasend-web`. Uploads and received files remain there until you remove them. Removing history does not remove downloaded files.
+Stop with Ctrl+C. `--data PATH` chooses the storage directory; `--port NUMBER` changes the native peer port. `--name NAME` sets and saves the displayed device name. Default data is in your OS user configuration directory under `omasend-web`. Uploads and received files remain there until you remove them. Removing history does not remove downloaded files.
 
 ## Connect
 

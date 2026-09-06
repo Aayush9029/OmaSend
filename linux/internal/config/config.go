@@ -110,6 +110,22 @@ func (s *Store) SetAutoCopy(value bool) error {
 	return s.saveLocked()
 }
 
+func (s *Store) SetDeviceName(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 100 {
+		return errors.New("device name must contain 1 to 100 characters")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old := s.data.DeviceName
+	s.data.DeviceName = value
+	if err := s.saveLocked(); err != nil {
+		s.data.DeviceName = old
+		return err
+	}
+	return nil
+}
+
 func (s *Store) SetPairingCode(value string) error {
 	value = strings.TrimSpace(value)
 	if len(value) < 20 || len(value) > 1024 {
