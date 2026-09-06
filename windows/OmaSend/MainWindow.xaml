@@ -7,7 +7,10 @@
    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
    <Button x:Name="BackButton" Click="GoBack" Visibility="Collapsed" Style="{StaticResource RowButton}" Padding="8" Margin="0,0,8,0" AutomationProperties.Name="Back"><TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons"/></Button>
    <TextBlock x:Name="PageTitle" Grid.Column="1" Text="OmaSend" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
-   <Button Grid.Column="2" Click="Dismiss" Style="{StaticResource RowButton}" Padding="8" AutomationProperties.Name="Close panel"><TextBlock Text="&#xE8BB;" FontFamily="Segoe Fluent Icons" FontSize="12"/></Button>
+   <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+    <TextBlock Text="Auto copy" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+    <ToggleButton x:Name="AutoButton" Click="ToggleAuto" Style="{StaticResource AutoCopySwitch}" AutomationProperties.Name="Auto copy" ToolTip="Copy incoming items to your clipboard"/>
+   </StackPanel>
   </Grid>
   <Grid Grid.Row="1">
    <Grid x:Name="HomePage">
@@ -30,9 +33,12 @@
   <StackPanel Grid.Row="2">
    <TextBlock x:Name="ErrorText" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" FontSize="12" Margin="20,8" Visibility="Collapsed"/>
    <Border x:Name="HomeFooter" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource LayerFillColorAltBrush}" Padding="20,12">
-    <Grid><CheckBox x:Name="AutoButton" Content="Auto copy" Click="ToggleAuto" VerticalAlignment="Center" AutomationProperties.Name="Toggle auto copy"/>
+    <Grid>
      <Button Click="OpenSettings" Style="{StaticResource RowButton}" HorizontalAlignment="Right" Padding="8" ToolTip="Settings" AutomationProperties.Name="OmaSend Settings"><TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16"/></Button>
     </Grid>
+   </Border>
+   <Border x:Name="DevicesFooter" Visibility="Collapsed" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource LayerFillColorAltBrush}" Padding="20,12">
+    <Button Content="Pair a device" Click="OpenSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="12,8"/>
    </Border>
   </StackPanel>
  </Grid>

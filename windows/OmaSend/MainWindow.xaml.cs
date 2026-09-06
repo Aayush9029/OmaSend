@@ -131,9 +131,7 @@ public partial class MainWindow : Window
         {
             var button = new Button { Style = (Style)FindResource("RowButton"), Margin = new Thickness(0, 1, 0, 1), ToolTip = $"{item.OriginName} · {DateTimeOffset.FromUnixTimeMilliseconds(Math.Clamp(item.CreatedAt, 0, 253402300799999)).LocalDateTime:g}" };
             System.Windows.Automation.AutomationProperties.SetName(button, "Copy " + (item.FileName ?? item.Text ?? "image"));
-            var grid = new Grid(); grid.ColumnDefinitions.Add(new() { Width = new GridLength(24) }); grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(22) });
-            var icon = new TextBlock { Text = item.Type == "file" ? "\uE8A5" : "\uE8C8", FontFamily = new FontFamily("Segoe Fluent Icons"), Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center };
-            grid.Children.Add(icon);
+            var grid = new Grid(); grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(30) });
             FrameworkElement content;
             if (item.Data is not null)
             {
@@ -141,9 +139,9 @@ public partial class MainWindow : Window
                 catch { content = new TextBlock { Text = "Image unavailable" }; }
             }
             else content = new TextBlock { Text = item.FileName ?? item.Text, TextWrapping = TextWrapping.Wrap, MaxHeight = 42, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.Normal };
-            Grid.SetColumn(content, 1); grid.Children.Add(content);
+            grid.Children.Add(content);
             var copy = new TextBlock { Text = "\uE8C8", FontFamily = new FontFamily("Segoe Fluent Icons"), Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-            Grid.SetColumn(copy, 2); grid.Children.Add(copy); button.Content = grid;
+            Grid.SetColumn(copy, 1); grid.Children.Add(copy); button.Content = grid;
             button.Click += (_, _) => { if (clipboard.Write(item)) { ErrorText.Visibility = Visibility.Collapsed; } };
             HistoryRows.Children.Add(button);
         }
@@ -220,6 +218,7 @@ public partial class MainWindow : Window
     {
         page = name; PageTitle.Text = title;
         HomePage.Visibility = HomeFooter.Visibility = Visibility.Collapsed;
+        DevicesFooter.Visibility = name == "devices" ? Visibility.Visible : Visibility.Collapsed;
         BackButton.Visibility = DetailPage.Visibility = Visibility.Visible;
         DetailContent.Children.Clear(); deviceLayout = ""; DetailPage.ScrollToTop();
         OpenPanel(); BackButton.Focus();
@@ -228,10 +227,10 @@ public partial class MainWindow : Window
     {
         page = "home"; PageTitle.Text = "OmaSend";
         HomePage.Visibility = HomeFooter.Visibility = Visibility.Visible;
+        DevicesFooter.Visibility = Visibility.Collapsed;
         BackButton.Visibility = DetailPage.Visibility = Visibility.Collapsed;
         DetailContent.Children.Clear(); AutoButton.Focus();
     }
-    private void Dismiss(object sender, RoutedEventArgs e) => Hide();
     private void OpenDevices(object sender, RoutedEventArgs e)
     {
         ShowDetail("devices", "Devices"); RenderDevices();
@@ -259,8 +258,6 @@ public partial class MainWindow : Window
         foreach (var peer in peers) Device(peer.Name, "Connected \u00B7 " + peer.Via);
         foreach (var candidate in nearby) Device(candidate.Name, "Not paired");
         if (peers.Length + nearby.Length == 0) Device("Looking for devices", "No devices found");
-        var pair = new Button { Content = "Pair a device", Margin = new Thickness(0, 16, 0, 0) };
-        pair.Click += OpenSettings; DetailContent.Children.Add(pair);
     }
     private static bool StartupEnabled()
     {
