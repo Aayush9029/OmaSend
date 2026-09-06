@@ -46,6 +46,12 @@ Only the hosting computer's localhost page can change the companion's sharing mo
 - Browser clipboard APIs require a secure context and usually a user gesture. This companion does not promise automatic background clipboard sync. Use the native apps for that.
 - Items sent while no devices are connected stay in the companion's history. They are not automatically resent later.
 
+## Appearance and history
+
+Use the appearance button to switch between light and dark; the browser remembers your choice. Search recent items by text, file name, or device name, and filter by **All**, **Text**, or **Files**.
+
+The interface and its Lucide icons are embedded in the executable and work offline. The icon subset comes from `lucide-static` 1.41.0 on npm; its [ISC / MIT notices](licenses/lucide.txt) are included in the bundled JavaScript. No Node.js installation is required to build or run the companion.
+
 ## Build from source
 
 With Go 1.24 or newer, from the repository:

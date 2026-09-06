@@ -70,7 +70,7 @@ func New(node *daemon.Daemon, uploads string, addresses []string) http.Handler {
 			return
 		}
 		switch r.URL.Path {
-		case "/", "/app.js", "/style.css":
+		case "/", "/app.js", "/icons.js", "/style.css":
 			files.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
