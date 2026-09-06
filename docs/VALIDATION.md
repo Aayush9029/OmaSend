@@ -13,3 +13,11 @@
 ## CI and limits
 
 Native Linux and macOS CI execution results will be recorded after the workflow completes. Windows ARM64 is cross-built; no ARM64 runtime test has been performed. Tailscale parsing is implemented, but no live tailnet or physical macOS/Windows/Linux three-machine test has been performed. Existing macOS and Omarchy screenshots were retained; the Windows screenshot is a real app capture with simulated Python peers.
+
+## Windows tray follow-up
+
+The redesigned WPF Fluent popup was visually checked on Windows: Devices and inline Settings navigation, masked pairing field, and native controls. The preview temporarily disabled light dismissal for capture; that diagnostic behavior is removed from packaged builds. Physical desktop coordinates now position the flyout correctly across mixed-DPI monitors. Reopening signals the existing instance without a blocking duplicate-instance dialog.
+
+A real Mac on the local network completed the encrypted hello handshake with the Windows pairing helper, and the running Windows UI showed the Mac connected. This verifies real cross-OS pairing; it is not a claim of an end-to-end physical three-platform clipboard test.
+
+The 28 core checks passed after the redesign. Both Windows architectures bundle their runtime; packaging rejects missing runtime files or references to an external framework. ARM64 packages are built but have not run on ARM64 hardware.

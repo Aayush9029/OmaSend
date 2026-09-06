@@ -12,6 +12,14 @@ foreach ($rid in $Runtime) {
     $stage = Join-Path $repoRoot ".build/windows/$Version/$rid"
     & dotnet publish (Join-Path $repoRoot 'windows/OmaSend/OmaSend.csproj') -c Release -r $rid --self-contained true -p:RestoreLockedMode=true -p:Version=$Version -p:DebugType=None -o $stage
     if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed.' }
+    # Refuse to ship an app that would ask users to install .NET or WPF.
+    foreach ($required in @('OmaSend.exe', 'hostfxr.dll', 'hostpolicy.dll', 'coreclr.dll', 'System.Private.CoreLib.dll', 'PresentationFramework.dll', 'wpfgfx_cor3.dll')) {
+        if (!(Test-Path -LiteralPath (Join-Path $stage $required))) { throw "Incomplete self-contained package: $required is missing." }
+    }
+    $runtimeConfig = Get-Content -LiteralPath (Join-Path $stage 'OmaSend.runtimeconfig.json') -Raw | ConvertFrom-Json
+    if ($runtimeConfig.runtimeOptions.framework -or $runtimeConfig.runtimeOptions.frameworks) {
+        throw 'Package depends on a separately installed .NET runtime.'
+    }
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $repoRoot 'windows/THIRD-PARTY-NOTICES.txt') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $repoRoot 'windows/licenses') -Destination $stage -Recurse -Force

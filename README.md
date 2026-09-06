@@ -21,7 +21,7 @@
 
 Text, images, and files travel directly over your local network or Tailscale with AES-256-GCM encryption. No cloud or account. Native apps, 50-item history, and resumable file transfers.
 
-Use **the same pairing code on every device**. Open **OmaSend Settings > Devices** on Windows or macOS. On Linux, run `omasend pair show` or `omasend pair set <code>`. All three can connect at once. Enable **Auto copy** to put incoming items on your clipboard.
+Use **the same pairing code on every device**. Open **Settings > Pairing code** on Windows or **OmaSend Settings > Devices** on macOS. On Linux, run `omasend pair show` or `omasend pair set <code>`. All three can connect at once. Enable **Auto copy** to put incoming items on your clipboard.
 
 Linux requires Wayland and `wl-clipboard`. The Omarchy panel uses Omarchy Shell plugin support. Windows builds are unsigned; CI macOS builds are not notarized. [Install details](docs/INSTALL.md).
 

@@ -5,24 +5,37 @@ namespace OmaSend;
 public partial class App : Application
 {
     private Mutex? instance;
+    private EventWaitHandle? openRequested;
+    private RegisteredWaitHandle? openWait;
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         string root = Environment.GetEnvironmentVariable("OMASEND_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OmaSend", "Data");
         string identity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(root)))[..16];
         instance = new Mutex(true, "Local\\OmaSend-" + identity, out bool created);
-        if (!created) { MessageBox.Show("OmaSend is already running. Open it from the system tray.", "OmaSend"); Shutdown(); return; }
+        openRequested = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\OmaSend-Open-" + identity);
+        if (!created)
+        {
+            if (!e.Args.Contains("--background")) openRequested.Set();
+            Shutdown(); return;
+        }
         try
         {
             var window = new MainWindow(root);
             MainWindow = window;
-            if (!e.Args.Contains("--background")) window.Show();
+            openWait = ThreadPool.RegisterWaitForSingleObject(openRequested, (_, _) =>
+                Dispatcher.BeginInvoke(window.OpenPanel), null, Timeout.Infinite, false);
+            if (!e.Args.Contains("--background")) window.OpenPanel();
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine(ex);
             MessageBox.Show("OmaSend could not start. " + ex.Message, "OmaSend", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }
-    protected override void OnExit(ExitEventArgs e) { instance?.Dispose(); base.OnExit(e); }
+    protected override void OnExit(ExitEventArgs e)
+    {
+        openWait?.Unregister(null); openRequested?.Dispose(); instance?.Dispose(); base.OnExit(e);
+    }
 }

@@ -11,6 +11,7 @@
     <ApplicationIcon>AppIcon.ico</ApplicationIcon>
     <Version>0.2.0</Version>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <PublishSelfContained>true</PublishSelfContained>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>

@@ -7,6 +7,11 @@ namespace OmaSend;
 
 public sealed class Discovery : IDisposable
 {
+    public sealed record Candidate(string Id, string Name, DateTimeOffset Seen);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Candidate> candidates = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> resolving = new();
+    public Candidate[] Candidates => candidates.Values.Where(c => DateTimeOffset.UtcNow - c.Seen < TimeSpan.FromMinutes(2)).ToArray();
+    public event Action? CandidatesChanged;
     private readonly MulticastService mdns = new();
     private readonly ServiceDiscovery services;
     private readonly ServiceProfile profile;
@@ -21,19 +26,51 @@ public sealed class Discovery : IDisposable
         profile.AddProperty("v", "1"); profile.AddProperty("id", settings.DeviceId); profile.AddProperty("name", settings.DeviceName);
         services.ServiceInstanceDiscovered += (_, e) =>
         {
-            if (!e.ServiceInstanceName.ToString().EndsWith("._omasend._tcp.local", StringComparison.OrdinalIgnoreCase)) return;
-            var records = e.Message.Answers.Concat(e.Message.AdditionalRecords).ToArray();
-            foreach (var srv in records.OfType<SRVRecord>().Where(r => r.Name == e.ServiceInstanceName))
-            {
-                var addresses = records.OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address).ToArray();
-                if (addresses.Length == 0) _ = network.Probe(srv.Target.ToString(), srv.Port);
-                foreach (var ip in addresses.Where(ip => !ip.Equals(IPAddress.Any) && !ip.IsIPv6LinkLocal)) _ = network.Probe(ip.ToString(), srv.Port);
-            }
+            if (!e.ServiceInstanceName.ToString().TrimEnd('.').EndsWith("._omasend._tcp.local", StringComparison.OrdinalIgnoreCase)) return;
+            _ = Resolve(e, settings.DeviceId);
         };
         services.Advertise(profile);
         mdns.Start();
         services.Announce(profile);
         _ = Maintain();
+    }
+    private async Task Resolve(ServiceInstanceDiscoveryEventArgs e, string ownId)
+    {
+        string key = e.ServiceInstanceName.ToString();
+        if (resolving.Count >= 16 || !resolving.TryAdd(key, 0)) return;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            var records = e.Message.Answers.Concat(e.Message.AdditionalRecords).ToList();
+            if (!records.OfType<SRVRecord>().Any(r => r.Name == e.ServiceInstanceName) || !records.OfType<TXTRecord>().Any(r => r.Name == e.ServiceInstanceName))
+            {
+                var query = new Makaretu.Dns.Message();
+                query.Questions.Add(new Question { Name = e.ServiceInstanceName, Type = DnsType.ANY });
+                var response = await mdns.ResolveAsync(query, timeout.Token);
+                records.AddRange(response.Answers.Concat(response.AdditionalRecords));
+            }
+            var txt = records.OfType<TXTRecord>().Where(r => r.Name == e.ServiceInstanceName).SelectMany(r => r.Strings).ToArray();
+            string id = txt.FirstOrDefault(s => s.StartsWith("id=", StringComparison.Ordinal))?[3..] ?? key;
+            if (id == ownId) return;
+            string name = txt.FirstOrDefault(s => s.StartsWith("name=", StringComparison.Ordinal))?[5..] ?? key.Split('.')[0];
+            if (candidates.Count < 128 || candidates.ContainsKey(id)) candidates[id] = new(id, name[..Math.Min(name.Length, 100)], DateTimeOffset.UtcNow);
+            CandidatesChanged?.Invoke();
+            foreach (var srv in records.OfType<SRVRecord>().Where(r => r.Name == e.ServiceInstanceName))
+            {
+                var addresses = records.OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address).ToList();
+                if (addresses.Count == 0)
+                {
+                    var query = new Makaretu.Dns.Message();
+                    query.Questions.Add(new Question { Name = srv.Target, Type = DnsType.ANY });
+                    var response = await mdns.ResolveAsync(query, timeout.Token);
+                    addresses.AddRange(response.Answers.Concat(response.AdditionalRecords).OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address));
+                }
+                foreach (var ip in addresses.Where(ip => !ip.Equals(IPAddress.Any) && !ip.IsIPv6LinkLocal)) _ = network.Probe(ip.ToString(), srv.Port);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or System.Net.Sockets.SocketException or ObjectDisposedException or ArgumentException) { }
+        finally { resolving.TryRemove(key, out _); }
     }
     private async Task Maintain()
     {
