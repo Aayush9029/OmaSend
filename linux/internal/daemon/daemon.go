@@ -366,6 +366,11 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	if err := file.Sync(); err != nil {
 		return
 	}
+	// Windows cannot rename an open destination file. Close before finalizing on
+	// every platform so the embedded browser companion uses the same path.
+	if err := file.Close(); err != nil {
+		return
+	}
 	frame, err := protocol.ReadFrame(connection)
 	if err != nil {
 		return

@@ -45,6 +45,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: linux/go.mod
+          cache: false
+      - run: cd linux; go test ./internal/daemon ./internal/web
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
