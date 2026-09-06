@@ -6,12 +6,13 @@ const (
 	ProtocolVersion = 1
 	DefaultPort     = 53317
 	MaxClipboard    = 10 * 1024 * 1024
-	MaxFrame        = 14 * 1024 * 1024
+	MaxFrame        = 20 * 1024 * 1024
 	MaxHistory      = 50
 	MaxHistoryBytes = 50 * 1024 * 1024
 )
 
 type Message struct {
+	Port         int    `json:"port,omitempty"`
 	Version      int    `json:"version"`
 	Type         string `json:"type"`
 	ID           string `json:"id"`

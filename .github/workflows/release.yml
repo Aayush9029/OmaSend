@@ -1,0 +1,96 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v (builds a draft release)'
+        required: true
+        default: '0.2.0'
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: dotnet restore windows/OmaSend/OmaSend.csproj --locked-mode
+      - run: dotnet run --project windows/OmaSend.Tests -c Release
+      - run: ./tests/installer.ps1
+      - run: pip install -r tests/requirements.txt
+      - run: python tests/interop.py --bridge windows/OmaSend.Tests/bin/Release/net10.0/OmaSend.Tests.dll
+        env:
+          PYTHONIOENCODING: utf-8
+      - name: Package Windows
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:INPUT_VERSION) { $env:INPUT_VERSION } else { $env:GITHUB_REF_NAME.TrimStart('v') }
+          ./scripts/package-windows.ps1 -Version $version
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows
+          path: dist/*.zip
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: linux/go.mod
+          cache: false
+      - run: cd linux && go test ./... && go vet ./...
+      - name: Package Linux
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}" bash scripts/package-linux.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux
+          path: dist/*.tar.gz
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - run: cd macos && swift test
+      - name: Build macOS app (ad-hoc signed, not notarized)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          OMASEND_VERSION="$version" OMASEND_CONFIGURATION=release OMASEND_SIGN_IDENTITY=- bash macos/script/build_and_run.sh --no-launch
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent macos/dist/OmaSend.app "dist/OmaSend_${version}_macOS_arm64.zip"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: macos
+          path: dist/*.zip
+  draft:
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Checksums and draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]
+          cp install.ps1 release-assets/
+          (cd release-assets && sha256sum *.zip *.tar.gz install.ps1 > checksums.txt)
+          gh release create "v$version" release-assets/* --draft --target "$GITHUB_SHA" --title "OmaSend $version" --notes-file docs/RELEASE-NOTES.md

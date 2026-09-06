@@ -90,6 +90,8 @@ func (w *Wayland) Read(ctx context.Context) (Content, error) {
 }
 
 func (w *Wayland) Write(ctx context.Context, content Content) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if content.FilePath != "" {
 		absolute, err := filepath.Abs(content.FilePath)
 		if err != nil {
@@ -110,9 +112,7 @@ func (w *Wayland) Write(ctx context.Context, content Content) error {
 		if err := command.Run(); err != nil {
 			return err
 		}
-		w.mu.Lock()
 		w.last = fingerprint(content)
-		w.mu.Unlock()
 		return nil
 	}
 	mime := content.ContentType
@@ -126,9 +126,7 @@ func (w *Wayland) Write(ctx context.Context, content Content) error {
 	if err := command.Run(); err != nil {
 		return err
 	}
-	w.mu.Lock()
 	w.last = fingerprint(content)
-	w.mu.Unlock()
 	return nil
 }
 
@@ -140,14 +138,16 @@ func (w *Wayland) Watch(ctx context.Context, onChange func(Content)) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Serialize reads with writes so received clipboard content cannot echo.
+			w.mu.Lock()
 			readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			content, err := w.Read(readCtx)
 			cancel()
 			if err != nil || (content.Text == "" && len(content.Data) == 0 && content.FilePath == "") {
+				w.mu.Unlock()
 				continue
 			}
 			hash := fingerprint(content)
-			w.mu.Lock()
 			changed := hash != w.last
 			if changed {
 				w.last = hash
@@ -161,6 +161,9 @@ func (w *Wayland) Watch(ctx context.Context, onChange func(Content)) {
 }
 
 func fingerprint(content Content) [32]byte {
+	if content.ContentType == "" || strings.HasPrefix(content.ContentType, "text/") {
+		content.ContentType = "text/plain"
+	}
 	metadata := content.ContentType + "\x00" + content.Text + "\x00" + content.FilePath + "\x00" +
 		content.FileName + "\x00" + fmt.Sprintf("%d:%d", content.FileSize, content.FileModified)
 	data := append([]byte(metadata), content.Data...)

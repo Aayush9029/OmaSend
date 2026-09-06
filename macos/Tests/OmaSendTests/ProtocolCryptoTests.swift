@@ -4,6 +4,17 @@ import Testing
 
 private let testSecret = "omasend-test-secret-0123456789-abcdef"
 
+@Test func remotePathIsNotLocalClipboardReference() throws {
+    let message = WireMessage(version: 1, type: "clipboard", id: "path", originId: "peer", originName: "Peer", createdAt: 1, text: "hello", filePath: "/private/local-file")
+    let opened = try ProtocolCrypto.open(ProtocolCrypto.seal(message, secret: testSecret), secret: testSecret)
+    #expect(opened.filePath == nil)
+}
+
+@Test func maxImageFitsFrame() throws {
+    let message = WireMessage(version: 1, type: "clipboard", id: "large", originId: "peer", originName: "Peer", createdAt: 1, text: nil, contentType: "image/png", data: Data(repeating: 0, count: OmaSendConstants.maxClipboardBytes).base64EncodedString())
+    #expect(try ProtocolCrypto.frame(ProtocolCrypto.seal(message, secret: testSecret)).count > 14_680_064)
+}
+
 @Test func transferPulseDirections() {
     #expect(TransferDirection.outgoing.barIndices == Array(0..<9))
     #expect(TransferDirection.incoming.barIndices == Array((0..<9).reversed()))

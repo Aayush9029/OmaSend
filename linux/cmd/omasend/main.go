@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -132,9 +131,7 @@ func runPair(socket string, arguments []string, jsonOutput bool) error {
 			return unavailable(err)
 		}
 		if command == "copy" {
-			copyCommand := exec.Command("wl-copy", "--type", "text/plain")
-			copyCommand.Stdin = strings.NewReader(response.PairingCode)
-			if err := copyCommand.Run(); err != nil {
+			if _, err := ipc.Call(socket, ipc.Request{Action: "pair-copy"}); err != nil {
 				return err
 			}
 			if !jsonOutput {

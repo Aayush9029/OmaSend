@@ -1,0 +1,12 @@
+* text=auto
+*.sh text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.cs text eol=lf
+*.xaml text eol=lf
+*.go text eol=lf
+*.swift text eol=lf
+*.ps1 text eol=lf
+*.png binary
+*.jpeg binary
+*.ico binary

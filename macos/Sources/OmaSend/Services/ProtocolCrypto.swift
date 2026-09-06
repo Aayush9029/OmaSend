@@ -60,7 +60,7 @@ enum ProtocolCrypto {
         let plain: Data
         do { plain = try AES.GCM.open(box, using: key, authenticating: additionalData) }
         catch { throw ProtocolCryptoError.authenticationFailed }
-        guard let message = try? JSONDecoder().decode(WireMessage.self, from: plain),
+        guard var message = try? JSONDecoder().decode(WireMessage.self, from: plain),
               message.version == OmaSendConstants.protocolVersion,
               !message.id.isEmpty,
               !message.originId.isEmpty,
@@ -68,6 +68,7 @@ enum ProtocolCrypto {
               validClipboardData(message.data),
               message.type != "clipboard" || validClipboardContent(message)
         else { throw ProtocolCryptoError.invalidMessage }
+        message.filePath = nil
         return message
     }
 
@@ -135,7 +136,9 @@ enum ProtocolCrypto {
         _ payload: Data, transferId: String, expectedOffset: Int64, secret: String
     ) throws -> Data {
         guard secret.count >= 20,
-              payload.count > MemoryLayout<UInt64>.size + 12 + 16
+              payload.count > MemoryLayout<UInt64>.size + 12 + 16,
+              payload.count <= OmaSendConstants.fileChunkBytes + 36,
+              expectedOffset >= 0
         else { throw ProtocolCryptoError.invalidMessage }
         let offset = payload.prefix(8).withUnsafeBytes {
             Int64(UInt64(bigEndian: $0.loadUnaligned(as: UInt64.self)))

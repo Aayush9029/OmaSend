@@ -2,8 +2,13 @@
 /dist/*.tar.gz
 /dist/*.zip
 /dist/*.dmg
+/dist/*.sha256
 /macos/.build/
 /macos/dist/
 /linux/omasend
 .DS_Store
+**/bin/
+**/obj/
+**/__pycache__/
+/windows/test-results/
 

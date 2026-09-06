@@ -63,7 +63,7 @@ func Open(secret string, data []byte) (model.Message, error) {
 		return model.Message{}, fmt.Errorf("unsupported protocol version %d", envelope.Version)
 	}
 	nonce, err := base64.StdEncoding.DecodeString(envelope.Nonce)
-	if err != nil {
+	if err != nil || len(nonce) != 12 {
 		return model.Message{}, errors.New("invalid nonce")
 	}
 	ciphertext, err := base64.StdEncoding.DecodeString(envelope.Ciphertext)
@@ -97,6 +97,8 @@ func Open(secret string, data []byte) (model.Message, error) {
 	if message.Type == "clipboard" && !model.ValidClipboard(message) {
 		return model.Message{}, errors.New("clipboard item is empty or unsupported")
 	}
+	// Remote paths are never valid local clipboard file references.
+	message.FilePath = ""
 	return message, nil
 }
 

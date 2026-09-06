@@ -4,7 +4,8 @@ enum OmaSendConstants {
     static let protocolVersion = 1
     static let defaultPort: UInt16 = 53_317
     static let maxClipboardBytes = 10_485_760
-    static let maxFrameBytes = 14_680_064
+    // Image base64 is encoded again inside the encrypted envelope.
+    static let maxFrameBytes = 20_971_520
     static let fileChunkBytes = 1_048_576
     static let maxHistory = 50
     static let serviceType = "_omasend._tcp."
@@ -24,10 +25,11 @@ struct WireMessage: Codable, Equatable {
     let fileSize: Int64?
     let fileSHA256: String?
     let resumeOffset: Int64?
-    let filePath: String?
+    var filePath: String?
+    let port: UInt16?
 
     enum CodingKeys: String, CodingKey {
-        case version, type, id, originName, createdAt, text
+        case version, type, id, originName, createdAt, text, port
         case contentType, data, fileName, fileSize, fileSHA256, resumeOffset, filePath
         case originId = "originId"
     }
@@ -38,7 +40,7 @@ struct WireMessage: Codable, Equatable {
         contentType: String? = nil, data: String? = nil,
         fileName: String? = nil, fileSize: Int64? = nil,
         fileSHA256: String? = nil, resumeOffset: Int64? = nil,
-        filePath: String? = nil
+        filePath: String? = nil, port: UInt16? = nil
     ) {
         self.version = version
         self.type = type
@@ -54,6 +56,7 @@ struct WireMessage: Codable, Equatable {
         self.fileSHA256 = fileSHA256
         self.resumeOffset = resumeOffset
         self.filePath = filePath
+        self.port = port
     }
 }
 

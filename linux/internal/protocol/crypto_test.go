@@ -1,14 +1,49 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"testing"
 
 	"github.com/Aayush9029/OmaSend/linux/internal/model"
 )
 
 const testSecret = "omasend-test-secret-0123456789-abcdef"
+
+func TestMalformedNonceDoesNotPanic(t *testing.T) {
+	for _, nonce := range []string{"", "AA==", "not-base64"} {
+		encoded, _ := json.Marshal(model.Envelope{Version: 1, Nonce: nonce, Ciphertext: "AA=="})
+		if _, err := Open(testSecret, encoded); err == nil {
+			t.Fatal("accepted invalid nonce")
+		}
+	}
+}
+
+func TestRemotePathIsNotLocalClipboardReference(t *testing.T) {
+	message := model.NewMessage("clipboard", "remote-path", "peer", "Peer", "text")
+	message.FilePath = "/private/local-file"
+	payload, _ := Seal(testSecret, message)
+	opened, err := Open(testSecret, payload)
+	if err != nil || opened.FilePath != "" {
+		t.Fatal("remote path survived", err)
+	}
+}
+
+func TestMaxImageFitsFrame(t *testing.T) {
+	message := model.NewMessage("clipboard", "large", "peer", "Peer", "")
+	message.ContentType = "image/png"
+	message.Data = base64.StdEncoding.EncodeToString(make([]byte, model.MaxClipboard))
+	payload, err := Seal(testSecret, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frame bytes.Buffer
+	if err := WriteFrame(&frame, payload); err != nil {
+		t.Fatal("documented image size exceeds frame", err)
+	}
+}
 
 func TestRoundTrip(t *testing.T) {
 	message := model.Message{Version: 1, Type: "clipboard", ID: "item-1", OriginID: "linux", OriginName: "Framework", CreatedAt: 42, Text: "hello 👋"}

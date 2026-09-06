@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
+    <Version>0.2.0</Version>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OmaSend.Core/OmaSend.Core.csproj" />
+    <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
+    <Resource Include="../../assets/AppIcon.png" Link="AppIcon.png" />
+  </ItemGroup>
+</Project>

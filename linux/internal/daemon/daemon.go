@@ -31,8 +31,9 @@ type Daemon struct {
 	clip  *clipboard.Wayland
 	port  int
 
-	mu    sync.RWMutex
-	peers map[string]model.Peer
+	mu         sync.RWMutex
+	peers      map[string]model.Peer
+	candidates map[string]discovery.Found
 }
 
 func New(store *config.Store) *Daemon {
@@ -40,7 +41,7 @@ func New(store *config.Store) *Daemon {
 	if value, err := strconv.Atoi(os.Getenv("OMASEND_PORT")); err == nil && value > 0 && value < 65536 {
 		port = value
 	}
-	return &Daemon{store: store, clip: &clipboard.Wayland{}, port: port, peers: map[string]model.Peer{}}
+	return &Daemon{store: store, clip: &clipboard.Wayland{}, port: port, peers: map[string]model.Peer{}, candidates: map[string]discovery.Found{}}
 }
 
 func (d *Daemon) Run(ctx context.Context, socketPath string) error {
@@ -59,7 +60,12 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 
 	snapshot := d.store.Snapshot()
 	shutdownBonjour, bonjourErr := discovery.Start(ctx, snapshot.DeviceID, snapshot.DeviceName, d.port, func(found discovery.Found) {
-		d.upsertPeer(model.Peer{ID: found.ID, Name: found.Name, Host: found.Host, Port: found.Port, Via: "Local network", LastSeen: time.Now()})
+		// Discovery is unauthenticated. Keep candidates separate until hello succeeds.
+		d.mu.Lock()
+		if len(d.candidates) < 128 {
+			d.candidates[net.JoinHostPort(found.Host, strconv.Itoa(found.Port))] = found
+		}
+		d.mu.Unlock()
 		go d.sendHello(ctx, found.Host, found.Port, "Local network")
 	})
 	if shutdownBonjour != nil {
@@ -81,6 +87,15 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 		case <-probeTicker.C:
 			go d.probeTailscale(ctx)
 		case <-helloTicker.C:
+			d.mu.RLock()
+			candidates := make([]discovery.Found, 0, len(d.candidates))
+			for _, found := range d.candidates {
+				candidates = append(candidates, found)
+			}
+			d.mu.RUnlock()
+			for _, found := range candidates {
+				go d.sendHello(ctx, found.Host, found.Port, "Local network")
+			}
 			for _, peer := range d.activePeers(2 * time.Minute) {
 				go d.sendHello(ctx, peer.Host, peer.Port, peer.Via)
 			}
@@ -120,7 +135,11 @@ func (d *Daemon) handleConnection(ctx context.Context, connection net.Conn) {
 	if strings.HasPrefix(host, "100.") {
 		via = "Tailscale"
 	}
-	d.upsertPeer(model.Peer{ID: message.OriginID, Name: message.OriginName, Host: host, Port: d.port, Via: via, LastSeen: time.Now()})
+	peerPort := model.DefaultPort
+	if message.Port > 0 && message.Port <= 65535 {
+		peerPort = message.Port
+	}
+	d.upsertPeer(model.Peer{ID: message.OriginID, Name: message.OriginName, Host: host, Port: peerPort, Via: via, LastSeen: time.Now()})
 	switch message.Type {
 	case "hello":
 		reply := d.newMessage("hello_ack", "")
@@ -479,7 +498,9 @@ func (d *Daemon) newMessage(kind, text string) model.Message {
 	snapshot := d.store.Snapshot()
 	bytes := make([]byte, 16)
 	_, _ = rand.Read(bytes)
-	return model.NewMessage(kind, hex.EncodeToString(bytes), snapshot.DeviceID, snapshot.DeviceName, text)
+	message := model.NewMessage(kind, hex.EncodeToString(bytes), snapshot.DeviceID, snapshot.DeviceName, text)
+	message.Port = d.port
+	return message
 }
 
 func (d *Daemon) upsertPeer(peer model.Peer) {
@@ -532,6 +553,13 @@ func (d *Daemon) handleIPC(request ipc.Request) ipc.Response {
 		return ipc.Response{OK: true, Status: &status}
 	case "pair-show":
 		return ipc.Response{OK: true, PairingCode: d.store.Snapshot().PairingCode}
+	case "pair-copy":
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if err := d.clip.Write(ctx, clipboard.Content{ContentType: "text/plain", Text: d.store.Snapshot().PairingCode}); err != nil {
+			return ipc.Response{OK: false, Error: err.Error()}
+		}
+		return ipc.Response{OK: true}
 	case "pair-set":
 		if err := d.store.SetPairingCode(request.PairingCode); err != nil {
 			return ipc.Response{OK: false, Error: err.Error()}

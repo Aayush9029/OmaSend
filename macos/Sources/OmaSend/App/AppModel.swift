@@ -135,7 +135,7 @@ final class AppModel {
     func promptForPairingCode() {
         let alert = NSAlert()
         alert.messageText = "Pair Another Device"
-        alert.informativeText = "Paste the pairing code from OmaSend on your Linux computer. Existing peers will reconnect automatically."
+        alert.informativeText = "Use the same pairing code on every Mac, Windows, and Linux device. Existing peers will reconnect automatically."
         alert.addButton(withTitle: "Pair")
         alert.addButton(withTitle: "Cancel")
         let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
@@ -292,6 +292,15 @@ final class AppModel {
     }
 
     private func writePasteboard(_ message: WireMessage) {
+        if message.type == "file", let path = message.filePath,
+           FileManager.default.fileExists(atPath: path) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([URL(fileURLWithPath: path) as NSURL])
+            pasteboardChangeCount = pasteboard.changeCount
+            lastClipboardFingerprint = readPasteboard()?.fingerprint
+            return
+        }
         if message.contentType?.hasPrefix("image/") == true,
            let encoded = message.data, let data = Data(base64Encoded: encoded) {
             let clipboardData = pngData(from: data) ?? data

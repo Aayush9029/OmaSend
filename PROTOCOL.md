@@ -10,7 +10,7 @@ When the Tailscale CLI is available, OmaSend also reads online IPv4 peers from `
 
 ## Framing
 
-Each TCP frame begins with a four-byte unsigned big-endian payload length followed by one encrypted envelope. Frames are limited to 14 MiB.
+Each TCP frame begins with a four-byte unsigned big-endian payload length followed by one encrypted envelope. Since 0.2.0, frames are limited to 20 MiB so a 10 MiB image fits after both base64 encoding layers. Older clients limit frames to 14 MiB and remain compatible for smaller items.
 
 ## Encryption
 
@@ -27,6 +27,10 @@ The outer JSON envelope is:
 ```
 
 The authenticated plaintext includes a unique item ID, sender ID and name, timestamp, optional UTF-8 text, optional MIME type, and optional base64 image data.
+
+An optional authenticated `port` advertises the sender's listening port. Omission means 53317. Unknown JSON fields are ignored. Local filesystem paths in incoming wire messages are discarded; only completed local file transfers create clipboard file references.
+
+Every device in a group uses the same pairing code. Each sender broadcasts directly to all authenticated peers. Incoming clipboard items are not relayed, and clipboard writes are suppressed by the local watcher to avoid echoes. Discovery alone does not authenticate a peer. Devices must be mutually reachable for a full mesh. The protocol authenticates membership in the shared-code group, not an individual identity within that group.
 
 A `history_clear` message carries no content. The receiver deletes its entire clipboard history and does not rebroadcast, so a clear started on one device empties every connected device exactly once.
 
@@ -46,4 +50,4 @@ After the final chunk, the sender provides the full SHA-256 digest in an encrypt
 - Persisted history data: 50 MiB
 - Accepted images: PNG, JPEG, and GIF on Linux; images are normalized to PNG on macOS
 
-The configuration and history file is stored with user-only permissions. A device that does not know the pairing code cannot authenticate or decrypt a message.
+Configuration and history use user-only permissions. Windows additionally protects them with current-user DPAPI. Windows received files retain Mark of the Web. A device that does not know the pairing code cannot authenticate or decrypt a message. Clipboard history deduplicates item IDs; this version does not provide durable protocol-wide replay protection across application restarts.

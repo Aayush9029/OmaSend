@@ -20,13 +20,18 @@ final class NetworkService: NSObject, @unchecked Sendable {
     private var pairingCode = ""
     private var port = OmaSendConstants.defaultPort
 
-    func start(deviceId: String, deviceName: String, pairingCode: String) {
+    func start(deviceId: String, deviceName: String, pairingCode: String, port: UInt16 = OmaSendConstants.defaultPort, discover: Bool = true) {
         self.deviceId = deviceId
         self.deviceName = deviceName
         self.pairingCode = pairingCode
+        self.port = port
         startListener()
-        startBonjour()
+        if discover { startBonjour() }
         startMaintenanceTimer()
+    }
+
+    func connect(host: String, port: UInt16) {
+        queue.async { [weak self] in self?.sendHello(host: host, port: port, via: "Local network") }
     }
 
     func stop() {
@@ -42,6 +47,10 @@ final class NetworkService: NSObject, @unchecked Sendable {
             self?.peers.removeAll()
             self?.publishPeers()
         }
+        // Browse again even if previously discovered devices had a different code.
+        browser?.stop()
+        publishedService?.stop()
+        startBonjour()
     }
 
     func broadcast(_ message: WireMessage) {
@@ -138,7 +147,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
         }
         let host = remoteHost(connection.endpoint)
         let via = host.hasPrefix("100.") ? "Tailscale" : "Local network"
-        upsert(PeerDevice(id: message.originId, name: message.originName, host: host, port: port, via: via, lastSeen: Date()))
+        upsert(PeerDevice(id: message.originId, name: message.originName, host: host, port: message.port ?? OmaSendConstants.defaultPort, via: via, lastSeen: Date()))
         switch message.type {
         case "hello":
             let reply = makeMessage(type: "hello_ack", text: nil)
@@ -409,7 +418,7 @@ final class NetworkService: NSObject, @unchecked Sendable {
         WireMessage(
             version: OmaSendConstants.protocolVersion, type: type,
             id: UUID().uuidString.lowercased(), originId: deviceId,
-            originName: deviceName, createdAt: Int64(Date().timeIntervalSince1970 * 1_000), text: text
+            originName: deviceName, createdAt: Int64(Date().timeIntervalSince1970 * 1_000), text: text, port: port
         )
     }
 
