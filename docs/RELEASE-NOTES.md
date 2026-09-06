@@ -1,4 +1,7 @@
-Native Windows 11 support for encrypted clipboard sharing across macOS, Windows, and Linux.
+Clipboard and file sharing across Windows, macOS, Linux, and a new local browser companion.
+
+- OmaSend Web sends text and files, displays shared history, and downloads received items. One executable runs on each OS with no extra runtime. Browser access stays local; optional LAN access uses unencrypted HTTP.
+- Optional Trusted LAN mode on all native clients and the companion shares without copying keys. It is unencrypted, disabled by default, and must be enabled on each device. Encrypted pairing remains available and existing keys are preserved.
 
 - Windows tray app with text, PNG/image clipboard, resumable encrypted file transfers, clipboard history, pairing, optional peer hosts, Tailscale discovery, and sign-in startup.
 - Multiple paired devices share one code and receive each local clipboard change directly.
@@ -8,4 +11,4 @@ Native Windows 11 support for encrypted clipboard sharing across macOS, Windows,
 
 Windows executables are unsigned. The macOS app in this release has an ad-hoc signature and is not notarized. No Microsoft approval or Apple Developer ID signing is claimed. Standard operating-system security checks remain enabled.
 
-See docs/VALIDATION.md for executed tests and platform limitations. Existing macOS/Linux screenshots are retained; the new Windows screenshot was captured from the running app with explicitly simulated Python peers.
+See docs/WEB.md for browser setup and docs/VALIDATION.md for executed tests and platform limitations. The Windows README image is rendered from the native WPF app on a Windows CI runner with sample history.
