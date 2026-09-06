@@ -11,6 +11,13 @@
   <img src="assets/screenshots/omasend-linux.jpeg" width="32%" alt="OmaSend on Linux">
 </p>
 
+<p align="center">
+  <a href="https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/OmaSend_0.2.0_windows_x64.zip"><img src="assets/readme/download-windows.svg" alt="Download for Windows"></a>
+  <a href="https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/OmaSend_0.2.0_macOS_arm64.zip"><img src="https://img.shields.io/badge/Download%20for%20macOS-black?style=for-the-badge&amp;logo=apple&amp;logoColor=white" alt="Download for macOS"></a>
+  <a href="https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/omasend_0.2.0_linux_amd64.tar.gz"><img src="https://img.shields.io/badge/Download%20for%20Linux-333333?style=for-the-badge&amp;logo=linux&amp;logoColor=white" alt="Download for Linux"></a>
+</p>
+<p align="center">Windows x64 · macOS Apple Silicon · Linux x64<br><a href="https://github.com/Aayush9029/OmaSend/releases/latest">All downloads, ARM64 builds and release notes</a></p>
+
 ## Windows
 
 Install with one line in PowerShell:
