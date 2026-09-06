@@ -4,7 +4,7 @@ A local browser companion for Windows, macOS and Linux. Send text, upload files,
 
 ## Run
 
-Download and extract the `OmaSendWeb` archive for your OS and architecture from a release that includes it. These packages are built by the release workflow; v0.1.3 does not include the companion.
+Download and extract the `OmaSendWeb` archive for your OS and architecture from [OmaSend 0.2.0](https://github.com/Aayush9029/OmaSend/releases/tag/v0.2.0).
 
 Windows PowerShell:
 

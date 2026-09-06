@@ -13,7 +13,7 @@ Share text, images, and files directly between your computers. No cloud or accou
 
 Native Windows 11 tray app. x64 and ARM64 packages include .NET; there is no separate runtime to install.
 
-**Preview:** a Windows release has not been published yet. This one-line PowerShell installer is ready for the first Windows release:
+Install with one line in PowerShell:
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.ps1 -OutFile "$env:TEMP\OmaSend-install.ps1"; & "$env:TEMP\OmaSend-install.ps1"
@@ -51,7 +51,9 @@ The installer also enables the panel on compatible **Omarchy Shell** systems. Ot
 
 Open OmaSend in a browser on your local network. Send text, attach files, copy shared text, and download incoming files. Runs on Windows, macOS and Linux as one executable, with no extra runtime.
 
-**Preview:** build and run from this repository with Go installed:
+Download the [web companion for your OS](https://github.com/Aayush9029/OmaSend/releases/tag/v0.2.0) and run `omasend-web` (`omasend-web.exe` on Windows). No extra runtime is required.
+
+Or build and run from this repository with Go installed:
 
 ```sh
 cd linux && go run ./cmd/omasend-web
@@ -63,7 +65,7 @@ Open **http://localhost:53318**. Add `--lan YOUR_LAN_IP` to make it available to
 
 Use the same pairing code on every computer: **Settings > Pairing code** on Windows, **OmaSend Settings > Devices** on macOS, or `omasend pair set <code>` on Linux. Enable **Auto copy** to put received items directly on the clipboard.
 
-Prefer no key? Updated clients have an optional **Trusted LAN** switch in Windows Settings, macOS Devices, the Linux panel (`omasend lan on`), and the web companion. Enable it on each device to share without copying keys. It is unencrypted and disabled by default; existing published v0.1.3 apps need an update to use it.
+Prefer no key? Version 0.2.0 has an optional **Trusted LAN** switch in Windows Settings, macOS Devices, the Linux panel (`omasend lan on`), and the web companion. Enable it on each device to share without copying keys. It is unencrypted and disabled by default; older apps need an update to use it.
 
 ## Security
 

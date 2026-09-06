@@ -1,6 +1,6 @@
 cask "omasend" do
-  version "0.1.3"
-  sha256 "659778fd0fefc7ae4c023058766ef851c155ff8d4b04a8562ecbb3a04ed24afc"
+  version "0.2.0"
+  sha256 "697b181d163657f050f1725a3b1066263b26f696f821fe5016b20e78dc82c502"
 
   url "https://github.com/Aayush9029/OmaSend/releases/download/v#{version}/OmaSend_#{version}_macOS_arm64.zip"
   name "OmaSend"
