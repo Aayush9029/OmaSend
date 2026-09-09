@@ -14,7 +14,7 @@ final class PopupPanelController {
     var isVisible: Bool { panel.isVisible }
     var wasJustDismissed: Bool { Date().timeIntervalSince(dismissedAt) < 0.25 }
 
-    init<Content: View>(content: Content, onDismiss: @escaping () -> Void) {
+    init<Content: View>(content: Content, previewController: ClipboardPreviewController, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
         hostingController = NSHostingController(rootView: AnyView(content))
         hostingController.sizingOptions = [.preferredContentSize]
@@ -24,6 +24,10 @@ final class PopupPanelController {
             backing: .buffered,
             defer: true
         )
+        panel.onCancel = { [weak self] in self?.dismiss() }
+        panel.previewController = previewController
+        previewController.installInResponderChain()
+        previewController.sourceWindow = panel
         panel.contentViewController = hostingController
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -34,7 +38,10 @@ final class PopupPanelController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.animationBehavior = .utilityWindow
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.dismiss() }
+            MainActor.assumeIsolated {
+                guard let self, self.panel.previewController?.isPresenting != true else { return }
+                self.dismiss()
+            }
         }
         NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.position() }

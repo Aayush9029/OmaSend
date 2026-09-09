@@ -29,9 +29,12 @@ final class StatusItemController {
             ])
         }
 
-        popup = PopupPanelController(content: PopupView(model: model)) { [weak self] in
+        let previewController = ClipboardPreviewController()
+        popup = PopupPanelController(
+            content: PopupView(model: model, onPreview: previewController.preview),
+            previewController: previewController
+        ) { [weak self] in
             self?.statusItem.button?.highlight(false)
-            self?.model.setPopupVisible(false)
         }
         observeWidth()
     }
@@ -56,7 +59,6 @@ final class StatusItemController {
         let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
         button.highlight(true)
         popup.show(below: anchor)
-        model.setPopupVisible(true)
     }
 }
 

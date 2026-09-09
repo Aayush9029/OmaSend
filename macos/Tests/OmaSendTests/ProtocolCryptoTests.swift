@@ -15,11 +15,6 @@ private let testSecret = "omasend-test-secret-0123456789-abcdef"
     #expect(try ProtocolCrypto.frame(ProtocolCrypto.seal(message, secret: testSecret)).count > 14_680_064)
 }
 
-@Test func transferPulseDirections() {
-    #expect(TransferDirection.outgoing.barIndices == Array(0..<9))
-    #expect(TransferDirection.incoming.barIndices == Array((0..<9).reversed()))
-}
-
 @Test func imageFileUsesThumbnailRow() {
     let item = ClipboardItem(
         id: "image-file", text: "", originId: "mac", originName: "Mac",

@@ -106,7 +106,7 @@ struct ClipboardItem: Codable, Identifiable, Equatable {
     var isFile: Bool { fileName != nil && filePath != nil }
     var preview: String {
         if let fileName { return fileName }
-        if isImage { return "Image" }
+        if isImage { return "Clipboard Image" }
         let collapsed = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         return collapsed.count > 110 ? String(collapsed.prefix(107)) + "..." : collapsed
     }
