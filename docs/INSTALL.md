@@ -41,9 +41,9 @@ brew tap aayush9029/omasend https://github.com/Aayush9029/OmaSend && brew instal
 
 The cask is pinned to the published macOS release and its SHA-256 hash.
 
-Alternatively, download the macOS ARM64 ZIP from [Releases](https://github.com/Aayush9029/OmaSend/releases/latest), extract it, and move OmaSend to Applications. macOS 15 or later is required. The automated build uses an ad-hoc signature and is not notarized; it may be blocked by your Mac's normal security policy. No security settings are changed by OmaSend.
+Alternatively, download the DMG from the [macOS 0.2.1 release](https://github.com/Aayush9029/OmaSend/releases/tag/macos-v0.2.1), open it, and drag OmaSend into Applications. This release is Developer ID signed and notarized by Apple. It requires Apple Silicon and macOS 15 or later. A ZIP archive is also available.
 
-The existing Developer ID/notarization packaging script remains available for maintainers with signing credentials. To build from source with Xcode command-line tools:
+To build from source with Xcode command-line tools:
 
 ```bash
 bash macos/script/build_and_run.sh
