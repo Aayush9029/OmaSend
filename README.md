@@ -6,9 +6,7 @@
 <p align="center">One encrypted clipboard across Windows, macOS, and Linux.</p>
 
 <p align="center">
-  <img src="assets/screenshots/omasend-windows.png" width="32%" alt="OmaSend on Windows in dark mode">
-  <img src="assets/screenshots/omasend-macos.jpeg" width="32%" alt="OmaSend on macOS">
-  <img src="assets/screenshots/omasend-linux.jpeg" width="32%" alt="OmaSend on Linux">
+  <img alt="banner" src="https://github.com/user-attachments/assets/4a44ccd5-7396-47e4-aa35-4fa6dc84f095" />
 </p>
 
 <p align="center">
