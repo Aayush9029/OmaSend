@@ -9,6 +9,6 @@ Clipboard and file sharing across Windows, macOS, Linux, and a new local browser
 - Raises the encrypted frame limit to support the documented 10 MiB image limit. Older clients remain compatible for smaller items; update all clients for full-size images.
 - Windows installer and Linux installer verify release SHA-256 checksums before installing.
 
-Windows executables are unsigned. The macOS app has an ad-hoc signature and is not notarized. No Microsoft approval or Apple Developer ID signing is claimed. Standard operating-system security checks remain enabled.
+Windows executables are unsigned. The macOS app and DMG are Developer ID signed and notarized by Apple. Standard operating-system security checks remain enabled.
 
 See docs/WEB.md for browser setup and docs/VALIDATION.md for executed tests and platform limitations. The Windows README image is rendered from the native WPF app on a Windows CI runner with sample history.

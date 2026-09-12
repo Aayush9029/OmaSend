@@ -11,6 +11,34 @@ APP="${ROOT_DIR}/dist/OmaSend.app"
 DIST="${REPO_DIR}/dist"
 mkdir -p "${DIST}"
 
+NOTARY_TEMP=""
+cleanup() {
+  if [[ -n "${NOTARY_TEMP}" && -d "${NOTARY_TEMP}" ]]; then rm -rf "${NOTARY_TEMP}"; fi
+}
+trap cleanup EXIT
+
+notary_args=()
+if [[ -n "${OMASEND_NOTARY_PROFILE:-}" ]]; then
+  notary_args=(--keychain-profile "${OMASEND_NOTARY_PROFILE}")
+elif [[ -n "${OMASEND_NOTARY_KEY_BASE64_FILE:-}" && -n "${OMASEND_NOTARY_KEY_ID:-}" && -n "${OMASEND_NOTARY_ISSUER:-}" ]]; then
+  NOTARY_TEMP="$(mktemp -d)"
+  base64 --decode < "${OMASEND_NOTARY_KEY_BASE64_FILE}" > "${NOTARY_TEMP}/AuthKey.p8"
+  chmod 600 "${NOTARY_TEMP}/AuthKey.p8"
+  notary_args=(
+    --key "${NOTARY_TEMP}/AuthKey.p8"
+    --key-id "${OMASEND_NOTARY_KEY_ID}"
+    --issuer "${OMASEND_NOTARY_ISSUER}"
+  )
+fi
+
+if (( ${#notary_args[@]} > 0 )); then
+  APP_NOTARY_ZIP="${ROOT_DIR}/dist/OmaSend-notarization.zip"
+  ditto -c -k --keepParent "${APP}" "${APP_NOTARY_ZIP}"
+  xcrun notarytool submit "${APP_NOTARY_ZIP}" "${notary_args[@]}" --wait
+  xcrun stapler staple "${APP}"
+  rm -f "${APP_NOTARY_ZIP}"
+fi
+
 ditto -c -k --sequesterRsrc --keepParent "${APP}" "${DIST}/OmaSend_${VERSION}_macOS_arm64.zip"
 
 DMG="${DIST}/OmaSend_${VERSION}_macOS_arm64.dmg"
@@ -45,4 +73,11 @@ if [[ ${create_dmg_status} -ne 0 && ${create_dmg_status} -ne 2 ]]; then
 fi
 [[ -f "${DMG}" ]] || { printf 'DMG was not created\n' >&2; exit 1; }
 
-codesign --force --sign "${IDENTITY}" "${DMG}"
+DMG_SIGN_ARGS=(--force --sign "${IDENTITY}")
+if [[ "${IDENTITY}" != "-" ]]; then DMG_SIGN_ARGS+=(--timestamp); fi
+codesign "${DMG_SIGN_ARGS[@]}" "${DMG}"
+
+if (( ${#notary_args[@]} > 0 )); then
+  xcrun notarytool submit "${DMG}" "${notary_args[@]}" --wait
+  xcrun stapler staple "${DMG}"
+fi
