@@ -35,3 +35,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{userprograms}\OmaSend"; Filename: "{app}\OmaSend.exe"; WorkingDir: "{app}"
 [Run]
 Filename: "{app}\OmaSend.exe"; Description: "Open OmaSend"; Flags: nowait postinstall skipifsilent
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "OmaSend"; ValueData: """{app}\OmaSend.exe"" --background"; Flags: uninsdeletevalue; Check: ExistingStartup
+[Code]
+function ExistingStartup: Boolean;
+begin
+  Result := RegValueExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'OmaSend');
+end;

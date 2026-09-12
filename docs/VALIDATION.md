@@ -1,5 +1,14 @@
 # Validation for 0.2.0
 
+## Windows update — September 12, 2026
+
+- Native Windows Release build; 46 protocol and transport checks passed.
+- Installer-script fixtures passed: platform-specific release selection, checksum verification, download protection, cancelled Setup, and WhatIf.
+- Live multicast regression passed with a simulated peer splitting TXT, SRV, and address records across packets, followed by authenticated TCP hello.
+- Isolated WPF settings checks passed: immediate switch persistence, debounced device-name save, removal of Save button, and retention of the previous code while an invalid partial code is entered.
+- Windows x64 Setup.exe installed successfully with bundled runtime, Start menu shortcut, and uninstaller.
+- Remaining Go tests passed on Windows after removing the companion code. No Mac build was run during this Windows work. Physical Mac connectivity was reported working by the user.
+
 ## Earlier development sessions (historical)
 
 ## Executed on the Windows 11 x64 development computer

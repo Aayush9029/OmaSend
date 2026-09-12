@@ -27,9 +27,9 @@ import (
 )
 
 type Daemon struct {
-	store   *config.Store
-	clip    *clipboard.Wayland
-	port    int
+	store *config.Store
+	clip  *clipboard.Wayland
+	port  int
 
 	mu         sync.RWMutex
 	peers      map[string]model.Peer

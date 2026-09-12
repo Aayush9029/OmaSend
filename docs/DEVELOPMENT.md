@@ -9,10 +9,14 @@ dotnet run --project windows/OmaSend.Tests -c Release
 dotnet run --project windows/OmaSend.WindowsTests -c Release
 pip install -r tests/requirements.txt
 python tests/interop.py --bridge windows/OmaSend.Tests/bin/Release/net10.0/OmaSend.Tests.dll
-./scripts/package-windows.ps1 -Version 0.2.0
+dotnet run --project windows/OmaSend.WindowsTests -c Release -- settings
+dotnet run --project windows/OmaSend.WindowsTests -c Release -- discovery
+./scripts/package-windows.ps1 -Version 0.2.2
 ```
 
-The Windows-only test writes generated text, a PNG, and a file reference to the real clipboard. Run it in an interactive user session. The core and Python suites use loopback sockets and isolated temporary files; their remote peers are simulations.
+The default Windows-only test writes generated text, a PNG, and a file reference to the real clipboard. Run it in an interactive user session. The `settings` test uses isolated settings; `discovery` uses a simulated multicast peer that splits TXT/SRV/address responses. The core and Python suites use loopback sockets and isolated temporary files; their remote peers are simulations.
+
+Packaging requires Inno Setup 6 (`ISCC.exe`); pass `-Compiler` if it is outside the standard install folder. The script emits self-contained x64 and ARM64 Setup.exe installers with SHA-256 sidecars.
 
 For an isolated interactive app test, initialize a fresh directory with `OmaSend.WindowsTests init <directory>`, then launch the app with `OMASEND_DATA_DIR` set to that directory, `OMASEND_PORT=53319`, `OMASEND_DOWNLOADS` set to an empty test folder, and `OMASEND_NO_DISCOVERY=1`. The initializer uses the public test-vector code and must never be used for normal sharing. Run `tests/windows_ui.py --helper <WindowsTests.dll> --downloads <test-folder>` to check real clipboard integration with two Python peers. `--keep-peers` retains them for up to 30 minutes for screenshot capture.
 
