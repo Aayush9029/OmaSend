@@ -30,7 +30,7 @@ Apple Silicon, macOS 15 or later. With [Homebrew](https://brew.sh) installed:
 brew tap aayush9029/omasend https://github.com/Aayush9029/OmaSend && brew install --cask aayush9029/omasend/omasend
 ```
 
-Or [download the signed and notarized macOS app](https://github.com/Aayush9029/OmaSend/releases/tag/macos-v0.2.1). The tap uses this repository and installs the checksum-pinned published release. macOS security checks still apply.
+Or [download the macOS app](https://github.com/Aayush9029/OmaSend/releases/tag/macos-v0.2.1). The tap uses this repository and installs the checksum-pinned published release. macOS security checks still apply.
 
 ## Linux
 

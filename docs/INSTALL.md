@@ -41,7 +41,13 @@ brew tap aayush9029/omasend https://github.com/Aayush9029/OmaSend && brew instal
 
 The cask is pinned to the published macOS release and its SHA-256 hash.
 
-Alternatively, download the DMG from the [macOS 0.2.1 release](https://github.com/Aayush9029/OmaSend/releases/tag/macos-v0.2.1), open it, and drag OmaSend into Applications. This release is Developer ID signed and notarized by Apple. It requires Apple Silicon and macOS 15 or later. A ZIP archive is also available.
+Alternatively, download the DMG from the [macOS 0.2.1 release](https://github.com/Aayush9029/OmaSend/releases/tag/macos-v0.2.1), open it, and drag OmaSend into Applications. It requires Apple Silicon and macOS 15 or later. A ZIP archive is also available.
+
+The app has an ad-hoc signature and is not notarized. On first launch, macOS blocks it. Open System Settings > Privacy & Security and click Open Anyway, or remove the quarantine flag:
+
+```bash
+xattr -d com.apple.quarantine /Applications/OmaSend.app
+```
 
 To build from source with Xcode command-line tools:
 
