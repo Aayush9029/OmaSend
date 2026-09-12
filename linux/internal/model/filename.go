@@ -2,7 +2,7 @@ package model
 
 import "strings"
 
-// SafeFileName is portable, including when the web companion runs on Windows.
+// SafeFileName is portable across supported platforms.
 func SafeFileName(name string) bool {
 	if name == "" || name == "." || name == ".." || len(name) > 200 || strings.ContainsAny(name, "<>:\"/\\|?*") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
 		return false

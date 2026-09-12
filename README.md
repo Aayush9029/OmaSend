@@ -4,7 +4,7 @@
 <p align="center">One encrypted clipboard across Windows, macOS, and Linux.</p>
 
 <p align="center">
-  <a href="https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/OmaSend_0.2.0_windows_x64.zip"><img src="assets/readme/download-windows.svg" alt="Download for Windows"></a>
+  <a href="https://github.com/Aayush9029/OmaSend/releases"><img src="assets/readme/download-windows.svg" alt="Download for Windows"></a>
   <a href="https://github.com/Aayush9029/OmaSend/releases/download/macos-v0.2.1/OmaSend_0.2.1_macOS_arm64.zip"><img src="https://img.shields.io/badge/Download%20for%20macOS-black?style=for-the-badge&amp;logo=apple&amp;logoColor=white" alt="Download for macOS"></a>
   <a href="https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/omasend_0.2.0_linux_amd64.tar.gz"><img src="https://img.shields.io/badge/Download%20for%20Linux-333333?style=for-the-badge&amp;logo=linux&amp;logoColor=white" alt="Download for Linux"></a>
 </p>
@@ -16,11 +16,17 @@
 
 ## Windows
 
-Install with one line in PowerShell:
+Download the Windows **Setup.exe** from [Releases](https://github.com/Aayush9029/OmaSend/releases) and run it. Setup includes .NET, creates a Start menu shortcut, supports upgrades, and includes an uninstaller. No ZIP extraction is needed.
+
+Or install with one line in PowerShell:
 
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.ps1 -OutFile "$env:TEMP\OmaSend-install.ps1"; & "$env:TEMP\OmaSend-install.ps1"
+& { $ErrorActionPreference = 'Stop'; Invoke-WebRequest 'https://raw.githubusercontent.com/Aayush9029/OmaSend/main/install.ps1' -UseBasicParsing -OutFile "$env:TEMP\OmaSend-install.ps1"; powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\OmaSend-install.ps1" }
 ```
+
+The installer selects the newest release containing your Windows architecture and verifies its SHA-256 checksum. The command's execution policy applies only to that PowerShell process. Open OmaSend from Start after installation.
+
+For discovery, keep both apps running on the same local network and allow OmaSend through Windows Firewall on that network. Use the same pairing code and sharing mode on both devices. If multicast is blocked by a guest network or VPN, add the other device's IP address in Settings.
 
 ## macOS
 
@@ -44,6 +50,6 @@ The installer also enables the panel on compatible **Omarchy Shell** systems. Ot
 
 ## Security
 
-By default, clipboard data and files travel directly between paired devices using AES-256-GCM. Optional Trusted LAN skips keys and encryption: anyone on that network can read or send items. The browser-to-companion LAN HTTP connection is also unencrypted.
+By default, clipboard data and files travel directly between paired devices using AES-256-GCM. Optional Trusted LAN skips keys and encryption: anyone on that network can read or send items.
 
-[Protocol](PROTOCOL.md) · [Build and screenshots](docs/DEVELOPMENT.md) · [Test results](docs/VALIDATION.md) · [MIT license](LICENSE)
+[Protocol](PROTOCOL.md) Â· [Build and screenshots](docs/DEVELOPMENT.md) Â· [Test results](docs/VALIDATION.md) Â· [MIT license](LICENSE)

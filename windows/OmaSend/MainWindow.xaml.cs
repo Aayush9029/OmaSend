@@ -194,19 +194,42 @@ public partial class MainWindow : Window
         var startup = new CheckBox { Content = "Launch at sign-in", IsChecked = StartupEnabled(), Margin = new Thickness(0, 0, 0, 16) }; panel.Children.Add(startup);
         var status = new TextBlock { TextWrapping = TextWrapping.Wrap };
         status.SetResourceReference(TextBlock.ForegroundProperty, "SystemFillColorCriticalBrush"); panel.Children.Add(status);
-        var save = new Button { Content = "Save", Margin = new Thickness(0, 8, 0, 8) };
-        save.Click += (_, _) =>
+        void Save(bool restartNetwork)
         {
+            try { settings.History = history.Snapshot; store.Save(settings); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+            { status.Text = "Could not save settings. Try changing the setting again."; return; }
+            status.Text = "";
+            if (restartNetwork) StartNetwork();
+        }
+        var debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+        void SaveText()
+        {
+            debounce.Stop();
             string secret = code.Password.Trim();
-            if (secret.Length < 20) { status.Text = "Pairing codes must contain at least 20 characters."; return; }
-            settings.TrustedLAN = lan.IsChecked == true;
-            settings.PairingCode = secret; settings.DeviceName = string.IsNullOrWhiteSpace(name.Text) ? Environment.MachineName : name.Text.Trim();
-            settings.Hosts = hosts.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().Take(32).ToArray();
-            try { SetStartup(startup.IsChecked == true); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { status.Text = "Could not update launch at sign-in."; return; }
-            Persist(); StartNetwork(); Render(); GoBack(this, new RoutedEventArgs());
+            bool validCode = secret.Length >= 20;
+            string deviceName = string.IsNullOrWhiteSpace(name.Text) ? Environment.MachineName : name.Text.Trim();
+            string[] addresses = hosts.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().Take(32).ToArray();
+            bool changed = (validCode && settings.PairingCode != secret) || settings.DeviceName != deviceName || !settings.Hosts.SequenceEqual(addresses);
+            if (validCode) settings.PairingCode = secret;
+            settings.DeviceName = deviceName; settings.Hosts = addresses;
+            if (changed) Save(true);
+            if (!validCode) status.Text = "Pairing codes must contain at least 20 characters. Your previous code is still active.";
+        }
+        void Schedule() { debounce.Stop(); debounce.Start(); }
+        debounce.Tick += (_, _) => SaveText();
+        code.PasswordChanged += (_, _) => Schedule();
+        name.TextChanged += (_, _) => Schedule(); hosts.TextChanged += (_, _) => Schedule();
+        code.LostKeyboardFocus += (_, _) => SaveText();
+        name.LostKeyboardFocus += (_, _) => SaveText(); hosts.LostKeyboardFocus += (_, _) => SaveText();
+        code.Unloaded += (_, _) => SaveText();
+        lan.Click += (_, _) => { settings.TrustedLAN = lan.IsChecked == true; Save(true); };
+        startup.Click += (_, _) =>
+        {
+            try { SetStartup(startup.IsChecked == true); status.Text = ""; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            { startup.IsChecked = StartupEnabled(); status.Text = "Could not update launch at sign-in."; }
         };
-        panel.Children.Add(save);
         var clear = new Button { Content = "Clear history on connected devices" };
         clear.Click += async (_, _) =>
         {

@@ -1,5 +1,0 @@
-import * as Dialog from 'radix-ui/dialog';
-import {X} from 'lucide-react';
-import {IconButton} from './ui';
-const keys=[['N','Write'],['U','Attach file'],['P','Paste'],['Ctrl / ⌘ Enter','Send'],['/','Search'],['C','Copy first text item'],['1 / 2 / 3','All / Text / Files'],['T','Light / Dark'],[',','Settings'],['?','Shortcuts'],['Esc','Close']];
-export default function Shortcuts({open,onOpenChange}){return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="dialog-content"><div className="flex items-center justify-between"><Dialog.Title>Shortcuts</Dialog.Title><Dialog.Close asChild><IconButton label="Close shortcuts"><X/></IconButton></Dialog.Close></div><Dialog.Description className="sr-only">Single-key shortcuts work when you are not typing.</Dialog.Description><dl className="shortcut-list">{keys.map(([key,label])=><div key={key}><dt>{label}</dt><dd><kbd>{key}</kbd></dd></div>)}</dl></Dialog.Content></Dialog.Portal></Dialog.Root>}

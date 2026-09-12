@@ -1,19 +1,5 @@
 # Validation for 0.2.0
 
-## Web companion and Trusted LAN — September 6, 2026
-
-[CI run 34011583158](https://github.com/Aayush9029/OmaSend/actions/runs/34011583158) passed for Windows, macOS and Linux at commit `3d63bd1`.
-
-- Windows: WPF Release build, 46 C# checks, installer checks, independent Python TCP interoperability in encrypted and Trusted LAN modes. Tests cover Unicode, PNG, two-peer fanout, fragmented frames, multi-chunk files, interrupted resume, completion hashes and malformed messages.
-- macOS: native Swift tests and Release build. TCP fanout ran in both modes, including different keys in Trusted LAN mode. Old configurations, mode separation, LAN address restrictions and matching Go/C# chunk vectors were checked.
-- Linux: Go tests, vet and race checks. Browser tests cover real loopback TCP text delivery, upload/download, persisted settings, arbitrary-path rejection, Host/Origin restrictions and host-only security settings.
-- The Go browser engine sent multi-chunk files in both directions in both modes on Windows and Linux. This caught and fixed the Windows requirement to close a received file before renaming it.
-- Web packages built for Windows, macOS and Linux on x64 and ARM64 with no external runtime. Cross-compilation is not an ARM64 hardware test.
-- The browser interface was visually inspected on Windows. Sending text added a real history item; Copy completed; Paste displayed the manual fallback when browser clipboard reading was unavailable. WebMCP read/send tools passed, including rejection of empty text.
-- The companion authenticated with the user's real Mac using the saved key, then sent a test text frame. The Mac clipboard display and Mac browser reachability were not independently confirmed. Both endpoints must use the same sharing mode.
-
-The current unsigned native WPF build is blocked by Smart App Control on the development machine. Earlier desktop checks below predate that block. Browser background clipboard monitoring is not implemented. No complete physical three-platform clipboard, live Tailscale, Linux desktop UI or ARM64 hardware test has been performed.
-
 ## Earlier development sessions (historical)
 
 ## Executed on the Windows 11 x64 development computer

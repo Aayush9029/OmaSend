@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "discovery") { DiscoveryChecks.Run().GetAwaiter().GetResult(); return; }
+        if (args.Length > 0 && args[0] == "settings") { SettingsChecks.Run(); return; }
         if (args.Length > 0 && args[0] == "init")
         {
             var store = new SettingsStore(args[1]);

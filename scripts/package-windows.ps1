@@ -2,9 +2,11 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$')][string]$Version = '0.2.0',
-    [ValidateSet('win-x64', 'win-arm64')][string[]]$Runtime = @('win-x64', 'win-arm64')
+    [ValidateSet('win-x64', 'win-arm64')][string[]]$Runtime = @('win-x64', 'win-arm64'),
+    [string]$Compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 $ErrorActionPreference = 'Stop'
+if (!(Test-Path -LiteralPath $Compiler)) { throw 'Install Inno Setup 6 or pass -Compiler with the path to ISCC.exe.' }
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $dist = Join-Path $repoRoot 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
@@ -24,8 +26,9 @@ foreach ($rid in $Runtime) {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'windows/THIRD-PARTY-NOTICES.txt') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $repoRoot 'windows/licenses') -Destination $stage -Recurse -Force
     $architecture = $rid.Substring(4)
-    $archive = Join-Path $dist "OmaSend_${Version}_windows_${architecture}.zip"
-    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive -Force
+    & $Compiler "/DAppVersion=$Version" "/DAppArch=$architecture" "/DSourceDir=$stage" "/DOutputDir=$dist" (Join-Path $repoRoot 'windows/setup.iss')
+    if ($LASTEXITCODE -ne 0) { throw 'Windows Setup build failed.' }
+    $archive = Join-Path $dist "OmaSend_${Version}_windows_${architecture}_Setup.exe"
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
 }

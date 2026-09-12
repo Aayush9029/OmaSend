@@ -8,21 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  web-ui:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-        working-directory: web
-      - run: npm run build
-        working-directory: web
-      - run: git diff --exit-code -- linux/internal/web/static
-
   linux:
     runs-on: ubuntu-latest
     defaults:
@@ -37,14 +22,7 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./cmd/omasend
-      - run: go build ./cmd/omasend-web
-      - run: go test -race ./internal/web ./internal/daemon ./internal/protocol
-      - name: Package all web companion targets
-        run: VERSION=0.2.0 bash ../scripts/package-web.sh
-      - uses: actions/upload-artifact@v6
-        with:
-          name: web-companion
-          path: dist/OmaSendWeb_*
+      - run: go test -race ./internal/daemon ./internal/protocol
 
   macos:
     runs-on: macos-15
@@ -64,7 +42,7 @@ jobs:
         with:
           go-version-file: linux/go.mod
           cache: false
-      - run: cd linux; go test ./internal/daemon ./internal/web
+      - run: cd linux; go test ./internal/daemon
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -74,6 +52,7 @@ jobs:
       - run: dotnet restore windows/OmaSend/OmaSend.csproj --locked-mode
       - run: dotnet build windows/OmaSend/OmaSend.csproj -c Release --no-restore
       - run: dotnet run --project windows/OmaSend.Tests -c Release
+      - run: dotnet run --project windows/OmaSend.WindowsTests -c Release -- settings
       - run: ./tests/installer.ps1
       - run: pip install -r tests/requirements.txt
       - run: python tests/interop.py --bridge windows/OmaSend.Tests/bin/Release/net10.0/OmaSend.Tests.dll
