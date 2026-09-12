@@ -28,7 +28,9 @@ For Windows, populate the isolated running app using `tests/windows_ui.py`, open
 
 ## Releases
 
-CI tests and builds all three platforms. The release workflow tests again, packages Windows x64/ARM64, Linux amd64/arm64, and macOS ARM64, then creates a draft containing a combined checksum manifest and Windows installer. A maintainer validates the draft assets before publishing it. No signing credentials are currently configured in this repository. The existing macOS Developer ID packaging script is preserved for a signing-capable machine.
+CI tests and builds all three platforms. The release workflow tests again, packages Windows x64/ARM64, Linux amd64/arm64, and macOS ARM64, then creates a draft containing a combined checksum manifest and Windows installer. A maintainer validates the draft assets before publishing it.
+
+The macOS job signs the app and DMG with the Developer ID certificate and notarizes both with Apple when the repository secrets `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_NOTARY_KEY_BASE64`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER` are set. `APPLE_CERTIFICATE_PASSWORD` is optional. The job imports the certificate into a temporary keychain, runs `macos/script/package_release.sh`, validates the staple, and deletes the keychain. Without the secrets, the job falls back to an ad-hoc signed ZIP. Windows executables are unsigned.
 
 ## Windows README capture
 
