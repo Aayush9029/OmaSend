@@ -1,35 +1,54 @@
 #requires -Version 5.1
-# Uses generated local fixtures; never downloads, launches, or changes Start menu entries.
+# Mocked downloads and process launch; no installer is run.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('omasend-installer-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
-$global:OmaSendTestBadHash = $false
 try {
-    $fixture = Join-Path $testRoot 'fixture'
-    New-Item -ItemType Directory -Path $fixture | Out-Null
-    Set-Content -LiteralPath (Join-Path $fixture 'OmaSend.exe') -Value 'inert installer test fixture' -Encoding ascii
-    $global:OmaSendTestArchive = Join-Path $testRoot 'fixture.zip'
-    Compress-Archive -LiteralPath (Join-Path $fixture 'OmaSend.exe') -DestinationPath $global:OmaSendTestArchive
-    $global:OmaSendTestHash = (Get-FileHash -LiteralPath $global:OmaSendTestArchive -Algorithm SHA256).Hash
+    $global:OmaSendTestFixture = Join-Path $testRoot 'Setup.exe'
+    Set-Content -LiteralPath $global:OmaSendTestFixture -Value 'inert setup fixture'
+    $global:OmaSendTestHash = (Get-FileHash $global:OmaSendTestFixture).Hash
+    $global:OmaSendTestBadHash = $false
+    $global:OmaSendTestLaunches = 0
+    $global:OmaSendTestExitCode = 0
+    function Invoke-RestMethod {
+        param([string]$Uri, $Headers)
+        if ($Uri -notmatch '/releases\?per_page=100&page=1$') { throw "Unexpected lookup: $Uri" }
+        @(
+            @{tag_name='macos-v0.2.3'; assets=@(@{name='OmaSend_0.2.3_macOS_arm64.zip'})},
+            @{tag_name='v0.2.2'; assets=@(@{name='OmaSend_0.2.2_windows_x64_Setup.exe'}, @{name='OmaSend_0.2.2_windows_arm64_Setup.exe'}, @{name='checksums.txt'})}
+        )
+    }
     function Invoke-WebRequest {
         param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing)
         if ($Uri -match '/checksums.txt$') {
             $hash = if ($global:OmaSendTestBadHash) { '0' * 64 } else { $global:OmaSendTestHash }
-            @("$hash  OmaSend_0.2.0_windows_x64.zip", "$hash  OmaSend_0.2.0_windows_arm64.zip") | Set-Content -LiteralPath $OutFile -Encoding ascii
-        } elseif ($Uri -match '^https://github.com/Aayush9029/OmaSend/releases/download/v0.2.0/OmaSend_0.2.0_windows_(x64|arm64).zip$') {
-            Copy-Item -LiteralPath $global:OmaSendTestArchive -Destination $OutFile
+            @("$hash  OmaSend_0.2.2_windows_x64_Setup.exe", "$hash  OmaSend_0.2.2_windows_arm64_Setup.exe") | Set-Content $OutFile
+        } elseif ($Uri -match '/v0.2.2/OmaSend_0.2.2_windows_(x64|arm64)_Setup.exe$') {
+            Copy-Item $global:OmaSendTestFixture $OutFile
         } else { throw "Unexpected download: $Uri" }
     }
-    $installRoot = Join-Path $testRoot 'installed'
-    & (Join-Path $repo 'install.ps1') -Version 0.2.0 -InstallRoot $installRoot -NoShortcut
-    $exe = Join-Path $installRoot '0.2.0/OmaSend.exe'
-    if (!(Test-Path -LiteralPath $exe) -or !(Get-Content -LiteralPath ($exe + ':Zone.Identifier') -Raw).Contains('ZoneId=3')) { throw 'Install or MOTW verification failed.' }
+    function Start-Process {
+        param([string]$FilePath, $ArgumentList, [switch]$Wait, [switch]$PassThru)
+        if (!(Get-Content ($FilePath + ':Zone.Identifier') -Raw).Contains('ZoneId=3')) { throw 'Missing download protection.' }
+        if (!$Wait -or !$PassThru -or $ArgumentList[1] -notmatch '^/DIR=".*"$') { throw 'Incorrect Setup arguments.' }
+        $global:OmaSendTestLaunches++
+        @{ExitCode=$global:OmaSendTestExitCode}
+    }
+    & "$repo/install.ps1" -InstallRoot (Join-Path $testRoot 'path with spaces')
+    if ($global:OmaSendTestLaunches -ne 1) { throw 'Compatible Setup was not run.' }
     $global:OmaSendTestBadHash = $true
     $rejected = $false
-    try { & (Join-Path $repo 'install.ps1') -Version 0.2.0 -InstallRoot (Join-Path $testRoot 'bad') -NoShortcut } catch { $rejected = $_.Exception.Message.Contains('checksum mismatch') }
-    if (!$rejected -or (Test-Path (Join-Path $testRoot 'bad/0.2.0'))) { throw 'Checksum mismatch was not rejected before install.' }
-    Write-Output 'PASS installer verified extraction, download protection, and corruption rejection'
+    try { & "$repo/install.ps1" -Version 0.2.2 } catch { $rejected = $_.Exception.Message.Contains('checksum mismatch') }
+    if (!$rejected -or $global:OmaSendTestLaunches -ne 1) { throw 'Corrupt installer was not rejected.' }
+    $global:OmaSendTestBadHash = $false
+    $global:OmaSendTestExitCode = 2
+    $rejected = $false
+    try { & "$repo/install.ps1" -Version 0.2.2 } catch { $rejected = $_.Exception.Message.Contains('exit code 2') }
+    if (!$rejected) { throw 'Cancelled Setup incorrectly reported success.' }
+    & "$repo/install.ps1" -Version 0.2.2 -WhatIf
+    if ($global:OmaSendTestLaunches -ne 2) { throw 'WhatIf ran Setup.' }
+    Write-Output 'PASS release selection, verified Setup launch, MOTW, corruption rejection, cancellation, WhatIf'
 } finally {
     $base = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
     $resolved = [IO.Path]::GetFullPath($testRoot)

@@ -2,19 +2,13 @@
 
 ## Windows 11
 
-Windows is currently a preview; no Windows release has been published yet. Published Windows x64 and ARM64 ZIPs will include the .NET runtime. Current unsigned builds can be blocked by Smart App Control.
+Download the Windows Setup.exe for x64 or ARM64 from Releases and run it. Setup installs for the current user, includes .NET, creates a Start menu shortcut, and registers an uninstaller. Settings and encrypted history remain in `%LOCALAPPDATA%/OmaSend/Data` during upgrades and uninstall.
 
-For a per-user installation with a Start menu shortcut, download `install.ps1` from the same release, review it, and run it from PowerShell using your normal execution policy:
+For PowerShell installation use the command in the README. It uses `-ExecutionPolicy Bypass` for that process only, downloads the matching Setup.exe, verifies its release SHA-256 checksum, and opens Setup. Windows publisher checks still apply; the installer is currently unsigned.
 
-```powershell
-./install.ps1
-```
+Discovery uses UDP 5353; transfers use TCP 53317. Allow OmaSend through the firewall on your local network. Both devices need the same pairing code and sharing mode. Settings save automatically. If multicast is blocked, add peer IP addresses in Settings.
 
-The installer verifies the ZIP against the release's SHA-256 manifest before installing to `%LOCALAPPDATA%/Programs/OmaSend/<version>`. It does not request administrator access, disable execution policy, remove download protection, or change firewall rules. Checksums verify download integrity over HTTPS; they are not publisher signatures. The Windows binaries are unsigned and may trigger Windows' normal publisher checks.
-
-If Windows requests network access, allow OmaSend only on networks you trust. Local discovery uses UDP 5353 and clipboard transfers use TCP 53317. If discovery is unavailable, add the other devices' IP addresses in Settings. Tailscale must already be installed and connected to use its discovery path.
-
-Close the window to keep the app in the tray. Choose **Quit OmaSend** in the tray menu to stop sharing. Enable **Launch at sign-in** in Settings if desired. To remove OmaSend, disable that option, quit, and delete its installation folder and Start menu shortcut. Encrypted history/settings remain under `%LOCALAPPDATA%/OmaSend/Data` until you delete them.
+Quit from the tray menu before replacing a manually extracted older copy. Use Windows Installed apps to uninstall Setup-installed copies.
 
 ## Linux
 

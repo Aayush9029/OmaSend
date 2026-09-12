@@ -27,10 +27,9 @@ import (
 )
 
 type Daemon struct {
-	browser bool
-	store   *config.Store
-	clip    *clipboard.Wayland
-	port    int
+	store *config.Store
+	clip  *clipboard.Wayland
+	port  int
 
 	mu         sync.RWMutex
 	peers      map[string]model.Peer
@@ -56,12 +55,8 @@ func (d *Daemon) Run(ctx context.Context, socketPath string) error {
 
 	go func() { <-ctx.Done(); listener.Close() }()
 	go d.accept(ctx, listener)
-	if !d.browser {
-		go d.clip.Watch(ctx, d.localClipboardChanged)
-	}
-	if !d.browser {
-		go func() { _ = ipc.Serve(socketPath, d.handleIPC, stop) }()
-	}
+	go d.clip.Watch(ctx, d.localClipboardChanged)
+	go func() { _ = ipc.Serve(socketPath, d.handleIPC, stop) }()
 
 	snapshot := d.store.Snapshot()
 	shutdownBonjour, bonjourErr := discovery.Start(ctx, snapshot.DeviceID, snapshot.DeviceName, d.port, func(found discovery.Found) {
@@ -372,8 +367,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	if err := file.Sync(); err != nil {
 		return
 	}
-	// Windows cannot rename an open destination file. Close before finalizing on
-	// every platform so the embedded browser companion uses the same path.
+	// Close the destination before finalizing the received file.
 	if err := file.Close(); err != nil {
 		return
 	}
@@ -399,7 +393,7 @@ func (d *Daemon) receiveFile(ctx context.Context, connection net.Conn, offer mod
 	message.FileSHA256 = actualHash
 	item := historyItem(message, d.store.Snapshot().DeviceID)
 	added, err := d.store.AddHistory(item)
-	if err == nil && added && !d.browser && d.store.Snapshot().AutoCopy {
+	if err == nil && added && d.store.Snapshot().AutoCopy {
 		writeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		_ = d.clip.Write(writeCtx, clipboard.Content{ContentType: message.ContentType, FilePath: finalPath})
 		cancel()
@@ -459,7 +453,7 @@ func (d *Daemon) receiveClipboard(ctx context.Context, message model.Message) {
 	if err != nil || !added {
 		return
 	}
-	if !d.browser && d.store.Snapshot().AutoCopy {
+	if d.store.Snapshot().AutoCopy {
 		writeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
 		_ = d.clip.Write(writeCtx, clipboardContent(message))

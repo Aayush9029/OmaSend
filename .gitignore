@@ -13,4 +13,4 @@
 /windows/test-results/
 
 
-/web/node_modules/
+/dist/*.exe

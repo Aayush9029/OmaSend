@@ -46,10 +46,9 @@ public sealed class Discovery : IDisposable
             var records = e.Message.Answers.Concat(e.Message.AdditionalRecords).ToList();
             if (!records.OfType<SRVRecord>().Any(r => r.Name == e.ServiceInstanceName) || !records.OfType<TXTRecord>().Any(r => r.Name == e.ServiceInstanceName))
             {
-                var query = new Makaretu.Dns.Message();
-                query.Questions.Add(new Question { Name = e.ServiceInstanceName, Type = DnsType.ANY });
-                var response = await mdns.ResolveAsync(query, timeout.Token);
-                records.AddRange(response.Answers.Concat(response.AdditionalRecords));
+                records = await ResolveRecords(e.ServiceInstanceName, records,
+                    r => r.OfType<SRVRecord>().Any(s => s.Name == e.ServiceInstanceName) &&
+                         r.OfType<TXTRecord>().Any(t => t.Name == e.ServiceInstanceName), timeout.Token);
             }
             var txt = records.OfType<TXTRecord>().Where(r => r.Name == e.ServiceInstanceName).SelectMany(r => r.Strings).ToArray();
             string id = txt.FirstOrDefault(s => s.StartsWith("id=", StringComparison.Ordinal))?[3..] ?? key;
@@ -60,18 +59,48 @@ public sealed class Discovery : IDisposable
             foreach (var srv in records.OfType<SRVRecord>().Where(r => r.Name == e.ServiceInstanceName))
             {
                 var addresses = records.OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address).ToList();
-                if (addresses.Count == 0)
+                if (!addresses.Any(UsableAddress))
                 {
-                    var query = new Makaretu.Dns.Message();
-                    query.Questions.Add(new Question { Name = srv.Target, Type = DnsType.ANY });
-                    var response = await mdns.ResolveAsync(query, timeout.Token);
-                    addresses.AddRange(response.Answers.Concat(response.AdditionalRecords).OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address));
+                    var resolved = await ResolveRecords(srv.Target, records,
+                        r => r.OfType<AddressRecord>().Any(a => a.Name == srv.Target && UsableAddress(a.Address)), timeout.Token);
+                    addresses.AddRange(resolved.OfType<AddressRecord>().Where(r => r.Name == srv.Target).Select(r => r.Address));
                 }
-                foreach (var ip in addresses.Where(ip => !ip.Equals(IPAddress.Any) && !ip.IsIPv6LinkLocal)) _ = network.Probe(ip.ToString(), srv.Port);
+                foreach (var ip in addresses.Where(UsableAddress).Distinct()) _ = network.Probe(ip.ToString(), srv.Port);
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException or System.Net.Sockets.SocketException or ObjectDisposedException or ArgumentException) { }
         finally { resolving.TryRemove(key, out _); }
+    }
+    private static bool UsableAddress(IPAddress ip) => !ip.Equals(IPAddress.Any) && !ip.Equals(IPAddress.IPv6Any) && !ip.IsIPv6LinkLocal;
+
+    // ResolveAsync in Makaretu completes on the first matching name, even when
+    // that packet contains only TXT or only SRV. Bonjour may split these records.
+    private async Task<List<ResourceRecord>> ResolveRecords(DomainName name, List<ResourceRecord> seed,
+        Func<List<ResourceRecord>, bool> complete, CancellationToken token)
+    {
+        var records = new List<ResourceRecord>(seed);
+        var ready = new TaskCompletionSource<List<ResourceRecord>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnAnswer(object? sender, MessageEventArgs args)
+        {
+            lock (records)
+            {
+                records.AddRange(args.Message.Answers.Concat(args.Message.AdditionalRecords)
+                    .Where(r => r.Name == name).Take(Math.Max(0, 256 - records.Count)));
+                if (complete(records)) ready.TrySetResult(new List<ResourceRecord>(records));
+            }
+        }
+        mdns.AnswerReceived += OnAnswer;
+        try
+        {
+            using var cancellation = token.Register(() => ready.TrySetCanceled(token));
+            while (!ready.Task.IsCompleted)
+            {
+                mdns.SendQuery(name);
+                await Task.WhenAny(ready.Task, Task.Delay(500, token));
+            }
+            return await ready.Task;
+        }
+        finally { mdns.AnswerReceived -= OnAnswer; }
     }
     private async Task Maintain()
     {
@@ -81,6 +110,7 @@ public sealed class Discovery : IDisposable
             do
             {
                 services.QueryServiceInstances("_omasend._tcp");
+                services.Announce(profile);
                 foreach (string host in hosts) _ = network.Probe(host.Trim());
                 if (!trustedLAN) await ProbeTailscale();
             } while (await timer.WaitForNextTickAsync(lifetime.Token));
