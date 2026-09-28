@@ -8,8 +8,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "local.omasend"
-  ipcTarget: "local.omasend"
+  moduleName: "io.github.aayush9029.omasend"
+  ipcTarget: "io.github.aayush9029.omasend"
   manageIpc: false
 
   property var status: ({ autoCopy: false, peers: [], historySize: 0 })

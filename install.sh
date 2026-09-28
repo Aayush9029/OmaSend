@@ -4,7 +4,8 @@ set -euo pipefail
 REPOSITORY="Aayush9029/OmaSend"
 INSTALL_ROOT="${HOME}/.local"
 SYSTEMD_ROOT="${HOME}/.config/systemd/user"
-OMARCHY_ROOT="${HOME}/.config/omarchy/plugins/local.omasend"
+PLUGIN_ID="io.github.aayush9029.omasend"
+PLUGINS="${HOME}/.config/omarchy/plugins"
 
 fail() { printf 'OmaSend: %s\n' "$1" >&2; exit 1; }
 [[ "$(uname -s)" == "Linux" ]] || fail "Linux is required"
@@ -44,11 +45,16 @@ systemctl --user enable omasend.service
 systemctl --user restart omasend.service
 
 if command -v omarchy >/dev/null && command -v omarchy-shell >/dev/null; then
-  install -Dm644 "${temporary_root}/omarchy/local.omasend/manifest.json" "${OMARCHY_ROOT}/manifest.json"
-  install -Dm644 "${temporary_root}/omarchy/local.omasend/Panel.qml" "${OMARCHY_ROOT}/Panel.qml"
-  omarchy plugin validate "${OMARCHY_ROOT}"
-  omarchy-shell -q shell rescanPlugins
-  omarchy plugin enable local.omasend --section right --before omarchy.clock
+  # Earlier versions installed a local copy of the widget under another ID.
+  if [[ -d "${PLUGINS}/local.omasend" ]]; then
+    omarchy plugin remove local.omasend --yes >/dev/null 2>&1 || rm -rf "${PLUGINS}/local.omasend"
+  fi
+  if [[ -d "${PLUGINS}/${PLUGIN_ID}" ]]; then
+    omarchy plugin update "${PLUGIN_ID}" --yes
+  else
+    omarchy plugin add "https://github.com/${REPOSITORY}" --yes
+  fi
+  omarchy plugin enable "${PLUGIN_ID}" --section right --before omarchy.clock
   printf 'Omarchy menu-bar panel installed\n'
 fi
 
